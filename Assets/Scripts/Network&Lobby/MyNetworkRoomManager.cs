@@ -2,10 +2,12 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using Mirror;
+using UnityEngine.SceneManagement;
 
 public class MyNetworkRoomManager : NetworkRoomManager
 {
     public static MyNetworkRoomManager Instance;
+    private const string OfflineSceneName = "MainMenu";
 
     public GameObject startGameButton;
 
@@ -64,7 +66,7 @@ public class MyNetworkRoomManager : NetworkRoomManager
             return;
     }
 
-    #region UI°´Å¥ÀàÖ´ÐÐÂß¼­
+    #region UIå¼•ç”¨
     public void StartGame()
     {
         gamePlayerCount = roomSlots.Count;
@@ -81,6 +83,14 @@ public class MyNetworkRoomManager : NetworkRoomManager
 
     public void ReturnToOffline()
     {
+        string originalOfflineScene = offlineScene;
+        offlineScene = string.Empty;
+
+        if (SteamLobby.Instance != null)
+        {
+            SteamLobby.Instance.LeaveCurrentLobby();
+        }
+
         if (NetworkServer.active && NetworkClient.isConnected)
         {
             StopHost();
@@ -93,6 +103,9 @@ public class MyNetworkRoomManager : NetworkRoomManager
         {
             StopServer();
         }
+
+        offlineScene = originalOfflineScene;
+        SceneManager.LoadScene(OfflineSceneName);
     }
     #endregion
 

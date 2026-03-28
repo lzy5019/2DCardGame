@@ -207,7 +207,7 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls:
       - m_Target: {fileID: 125329615}
-        m_TargetAssemblyTypeName: LobbyMenuController, Assembly-CSharp
+        m_TargetAssemblyTypeName: CreateLobby, Assembly-CSharp
         m_MethodName: HostLobby
         m_Mode: 1
         m_Arguments:
@@ -265,10 +265,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 125329609}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c2c6633c7bd3b72438934070662db939, type: 3}
+  m_Script: {fileID: 11500000, guid: 2d0647cf8d928f849915b87a324b8a15, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  startButton: {fileID: 0}
 --- !u!1 &356740744
 GameObject:
   m_ObjectHideFlags: 0

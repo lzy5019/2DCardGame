@@ -10,21 +10,18 @@ public class LobbyMenuController : MonoBehaviour
 
     private void Awake()
     {
-        MyNetworkRoomManager.Instance.startGameButton = startButton;
+        if(startButton != null)
+            MyNetworkRoomManager.Instance.startGameButton = startButton;
     }
 
     private void Start()
     {
-        startButton.SetActive(false);
+        if (startButton != null)
+            startButton.SetActive(false);
     }
 
     public void StartGame()
     {
         MyNetworkRoomManager.Instance.StartGame();
-    }
-
-    public void HostLobby()     // 主界面按钮
-    {
-        SteamMatchmaking.CreateLobby(ELobbyType.k_ELobbyTypeFriendsOnly, MyNetworkRoomManager.Instance.maxConnections);
     }
 }

@@ -1,12 +1,26 @@
+using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.UI;
 
 public class PlayerEndTurn : MonoBehaviour
 {
+    public static PlayerEndTurn Instance;
+
     public GameObject endTurnButtonObject;
     public Button endTurnButton;
 
     private PlayerState localPlayer;
+
+    private void Awake()
+    {
+        if (Instance != null && Instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
+
+        Instance = this;
+    }
 
     private void Start()
     {
@@ -14,29 +28,19 @@ public class PlayerEndTurn : MonoBehaviour
         {
             endTurnButton.onClick.AddListener(OnClickEndTurn);
         }
-    }
-
-    private void Update()
-    {
-        if (localPlayer == null)
-        {
-            FindLocalPlayer();
-        }
 
         RefreshButtonVisible();
     }
 
-    private void FindLocalPlayer()
+    public void RegisterLocalPlayer(PlayerState playerState)
     {
-        PlayerState[] players = FindObjectsOfType<PlayerState>();
-        foreach (PlayerState player in players)
-        {
-            if (player.isLocalPlayer)
-            {
-                localPlayer = player;
-                break;
-            }
-        }
+        localPlayer = playerState;
+        RefreshButtonVisible();
+    }
+
+    private void Update()
+    {
+        RefreshButtonVisible();
     }
 
     private void RefreshButtonVisible()
@@ -47,8 +51,7 @@ public class PlayerEndTurn : MonoBehaviour
 
         if (localPlayer != null && MatchManager.Instance != null && MatchManager.Instance.gameStarted)
         {
-            PlayerState currentPlayer = MatchManager.Instance.GetCurrentPlayer();
-            shouldShow = (currentPlayer == localPlayer);
+            shouldShow = localPlayer.isMyTurn;
         }
 
         endTurnButtonObject.SetActive(shouldShow);

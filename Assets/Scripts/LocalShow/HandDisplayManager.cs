@@ -3,6 +3,7 @@
 /// 负责读取手牌数据，生成手牌UI
 /// </summary>
 
+using Mirror;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -19,17 +20,61 @@ public class HandDisplayManager : MonoBehaviour
     public float maxRotation = 15f;
     public float curveHeight = 5f;
 
-    private List<GameObject> cardObjects = new List<GameObject>();
+    private readonly List<GameObject> cardObjects = new List<GameObject>();
 
-    private void Start()
+    private void Awake()
     {
-        Instance = this;
-        if (transform.parent != null && transform.parent.parent != null)
+        if (Instance != null && Instance != this)
         {
-            playerState = GetComponentInParent<PlayerState>();
+            Debug.LogWarning("场景中存在多个 HandDisplayManager，已销毁重复对象");
+            Destroy(gameObject);
+            return;
         }
+
+        Instance = this;
+    }
+
+    #region 本地登记 & 监听手牌数据变化
+    public void RegisterLocalPlayer(PlayerState localPlayerState)
+    {
+        if (localPlayerState == null)
+            return;
+
+        if (playerState == localPlayerState)
+            return;
+
+        UnregisterCurrentPlayer();
+
+        playerState = localPlayerState;
+        playerState.handCardIds.OnChange += OnHandCardsChanged;
+
         RefreshHand();
     }
+    public void UnregisterCurrentPlayer()
+    {
+        if (playerState != null)
+        {
+            playerState.handCardIds.OnChange -= OnHandCardsChanged;
+            playerState = null;
+        }
+
+        ClearHand();
+    }
+    private void OnDestroy()
+    {
+        if (Instance == this)
+        {
+            Instance = null;
+        }
+
+        UnregisterCurrentPlayer();
+    }
+
+    private void OnHandCardsChanged(SyncList<string>.Operation op, int index, string item)
+    {
+        RefreshHand();
+    }
+    #endregion
 
     public void RefreshHand()       // 刷新手牌显示
     {

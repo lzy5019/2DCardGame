@@ -97,6 +97,20 @@ public class PlayerState : NetworkBehaviour
         {
             Debug.LogWarning("SteamManager 尚未初始化，无法读取 Steam 名字和 SteamID");
         }
+
+        if (HandDisplayManager.Instance != null)
+        {
+            HandDisplayManager.Instance.RegisterLocalPlayer(this);
+        }
+        else
+        {
+            Debug.LogWarning("HandDisplayManager.Instance 是 null，本地手牌UI尚未准备好");
+        }
+
+        if (PlayerEndTurn.Instance != null)
+        {
+            PlayerEndTurn.Instance.RegisterLocalPlayer(this);
+        }
     }
     [Command]
     private void CmdSetSteamProfile(string newName, string newSteamId)
@@ -105,30 +119,11 @@ public class PlayerState : NetworkBehaviour
         steamId = newSteamId;
     }
 
-    #region 监听手牌变化刷新手牌
-    public override void OnStartClient()
-    {
-        base.OnStartClient();
-        handCardIds.OnChange += OnHandCardsChanged;
-    }
-    public override void OnStopClient()
-    {
-        handCardIds.OnChange -= OnHandCardsChanged;
-        base.OnStopClient();
-    }
-    private void OnHandCardsChanged(SyncList<string>.Operation op, int index, string item)
-    {
-        if (!isLocalPlayer) return;
-        if (HandDisplayManager.Instance == null) return;
-
-        HandDisplayManager.Instance.RefreshHand();
-    }
-    #endregion
-
     #endregion
 
     private void Start()
-    {
+    {   
+        // 负责保证非本地玩家UI关闭
         if (!isLocalPlayer && playerCanvas != null)
         {
             playerCanvas.SetActive(false);
@@ -225,15 +220,26 @@ public class PlayerState : NetworkBehaviour
     #endregion
 
     #region 牌堆操作
+
+    // 从handcardUI接收请求出牌
+    #region 出牌
+    public void RequestPlayCard(int handIndex)      
+    {
+        if (!isLocalPlayer)
+            return;
+
+        if (!isMyTurn)
+            return;
+
+        CmdRequestPlayCard(handIndex);
+    }
     [Command]
-    public void CmdPlayCard(int handIndex)      // 请求出牌
+    public void CmdRequestPlayCard(int handIndex)      // 请求出牌
     {
         if (!isMyTurn) return;
         if (handIndex < 0 || handIndex >= handCardIds.Count) return;
 
         string cardId = handCardIds[handIndex];
-
-        HandDisplayManager.Instance.RearrangeAfterPlay(handIndex);
 
         PlayCardFromHand(cardId, handIndex);
         Debug.Log("打出："+cardId);
@@ -241,6 +247,8 @@ public class PlayerState : NetworkBehaviour
         // 这里以后再补真正出牌效果
         // 比如加入弃牌堆、触发效果、加资源之类
     }
+    #endregion
+
     [Server]
     public void AddCardToOwned(string cardId)
     {

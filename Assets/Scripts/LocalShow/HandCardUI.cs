@@ -172,13 +172,12 @@ public class HandCardUI : MonoBehaviour,
 
         isDragging = false;
 
+        if (handDisplayManager == null || handDisplayManager.playerState == null)
+            return;
+
         if (IsInPlayArea())
         {
-            if (handDisplayManager.playerState.isMyTurn)
-            {
-                handDisplayManager.playerState.CmdPlayCard(handIndex);
-                return;
-            }
+            handDisplayManager.playerState.RequestPlayCard(handIndex);
         }
     }
 
