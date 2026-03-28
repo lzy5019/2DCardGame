@@ -11,7 +11,6 @@ public class CardEffect : MonoBehaviour
 {
     public static CardEffect Instance;
 
-    public GameManager gameManager;
 
     private void Awake()
     {
@@ -29,10 +28,7 @@ public class CardEffect : MonoBehaviour
     // =========================
     public void DrawCards(int amount)
     {
-        for (int i = 0; i < amount; i++)
-        {
-            gameManager.playerDeckManager.DrawCard();
-        }
+
     }
 
     

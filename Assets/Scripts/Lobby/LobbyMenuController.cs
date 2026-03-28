@@ -1,3 +1,4 @@
+using Steamworks;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -6,7 +7,6 @@ using UnityEngine.UI;
 public class LobbyMenuController : MonoBehaviour
 {
     [SerializeField] GameObject startButton;
-    [SerializeField] Text debugText;
 
     private void Awake()
     {
@@ -21,5 +21,10 @@ public class LobbyMenuController : MonoBehaviour
     public void StartGame()
     {
         MyNetworkRoomManager.Instance.StartGame();
+    }
+
+    public void HostLobby()     // 主界面按钮
+    {
+        SteamMatchmaking.CreateLobby(ELobbyType.k_ELobbyTypeFriendsOnly, MyNetworkRoomManager.Instance.maxConnections);
     }
 }

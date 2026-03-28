@@ -174,7 +174,11 @@ public class HandCardUI : MonoBehaviour,
 
         if (IsInPlayArea())
         {
-            handDisplayManager.playerDeckManager.PlayCard(cardId,handIndex);
+            if (handDisplayManager.playerState.isMyTurn)
+            {
+                handDisplayManager.playerState.CmdPlayCard(handIndex);
+                return;
+            }
         }
     }
 

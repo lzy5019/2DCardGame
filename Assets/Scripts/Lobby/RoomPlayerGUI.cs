@@ -49,7 +49,7 @@ public class RoomPlayerGUI : MonoBehaviour
     {
         if (playerName != null)
         {
-            playerName.text = $"Player [{player.index + 1}]";
+            playerName.text = player.name;
         }
         if (readyState != null)
         {
@@ -68,6 +68,7 @@ public class RoomPlayerGUI : MonoBehaviour
     private void InitializeUI()
     {
         player = GetComponent<NetworkRoomPlayer>();
+        player.gameObject.name = SteamFriends.GetPersonaName();
         playerlist = GameObject.FindWithTag("PlayerList");
         playerPanel = Instantiate(playerPanelPrefab, playerlist.transform) as GameObject;
         readyBtn = playerPanel.transform.Find("Ready Button").GetComponent<Button>();

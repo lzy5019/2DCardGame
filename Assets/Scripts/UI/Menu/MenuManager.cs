@@ -1,3 +1,4 @@
+using Mirror;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -5,14 +6,14 @@ using UnityEngine.SceneManagement;
 
 public class MenuManager : MonoBehaviour
 {
-    // Start is called before the first frame update
-    public void StartGame()
+
+    public void GotoLobby()
     {
-        SceneManager.LoadScene("BattleScene");
+        MyNetworkRoomManager.Instance.ReturnToLobby();
     }
 
-    public void GotoMenu()
+    public void ExitLobby()
     {
-        SceneManager.LoadScene("MainMenu");
+        MyNetworkRoomManager.Instance.ReturnToOffline();
     }
 }

@@ -12,6 +12,6 @@ public class ShopBackgroundClickCatcher : MonoBehaviour, IPointerClickHandler
         if (eventData.button != PointerEventData.InputButton.Left)
             return;
 
-        ShopSlotUI.ClearCurrentSelection();
+        //ShopSlotUI.ClearCurrentSelection();
     }
 }

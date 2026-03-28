@@ -9,7 +9,9 @@ using UnityEngine.UI;
 
 public class HandDisplayManager : MonoBehaviour
 {
-    public PlayerDeckManager playerDeckManager;
+    public static HandDisplayManager Instance;
+
+    public PlayerState playerState;
     public RectTransform handArea;
 
     public Vector2 cardSize = new Vector2(252, 352);
@@ -19,11 +21,21 @@ public class HandDisplayManager : MonoBehaviour
 
     private List<GameObject> cardObjects = new List<GameObject>();
 
+    private void Start()
+    {
+        Instance = this;
+        if (transform.parent != null && transform.parent.parent != null)
+        {
+            playerState = GetComponentInParent<PlayerState>();
+        }
+        RefreshHand();
+    }
+
     public void RefreshHand()       // 刷新手牌显示
     {
         ClearHand();
 
-        List<string> handCards = playerDeckManager.handCards;
+        List<string> handCards = new List<string>(playerState.handCardIds);
 
         for (int i = 0; i < handCards.Count; i++)
         {
@@ -106,7 +118,7 @@ public class HandDisplayManager : MonoBehaviour
         }
     }
 
-    public void RearrangeAfterPlay(int handIndex)       // 打出牌后重新分布牌
+    public void RearrangeAfterPlay(int handIndex)       // 打出牌后重新统筹
     {
         GameObject playedCardObj = cardObjects[handIndex];
 
@@ -130,9 +142,9 @@ public class HandDisplayManager : MonoBehaviour
         UpdateHandLayout();
     }
 
-    public void RearrangeAfterDraw()
+    public void RearrangeAfterDraw()        // 抽牌后重新统筹
     {
-        List<string> handCards = playerDeckManager.handCards;
+        List<string> handCards = new List<string>(playerState.handCardIds);
 
         int newIndex = handCards.Count - 1;
         if (newIndex < 0)

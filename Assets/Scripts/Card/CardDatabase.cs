@@ -1,3 +1,5 @@
+// 静态配置表
+
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -80,7 +82,7 @@ public class CardDatabase : MonoBehaviour
         return result;
     }
 
-    public List<CardData> GetCardsByScore(int score)      // 通过费用查询卡牌
+    public List<CardData> GetCardsByScore(int score)      // 通过分数查询卡牌
     {
         List<CardData> result = new List<CardData>();
 

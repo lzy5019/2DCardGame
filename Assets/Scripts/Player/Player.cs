@@ -3,10 +3,11 @@ using System.Collections.Generic;
 using UnityEngine;
 using Mirror;
 using Steamworks;
+using TMPro;
 
 public class Player : NetworkBehaviour
 {
-    [SerializeField] private TextMesh playerNameText;
+    [SerializeField] private TextMeshProUGUI playerNameText;
 
     [SyncVar(hook = nameof(OnNameChanged))]
     private string playerName;

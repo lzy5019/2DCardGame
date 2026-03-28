@@ -3,27 +3,46 @@ using UnityEngine;
 
 public class PlayerDataDisplay : MonoBehaviour
 {
-    [Header("显示哪个玩家")]
-    public int playerId = 0;
-
     [Header("UI引用")]
     [SerializeField] private TMP_Text attackText;
     [SerializeField] private TMP_Text manaText;
     [SerializeField] private TMP_Text scoreText;
+    private PlayerState localPlayer;
 
-    public void RefreshDisplay()
+    private void Update()
     {
-        PlayerData player = PlayerDataManager.Instance.GetPlayerById(playerId);
-
-        if (player == null)
+        if (localPlayer == null)
         {
-            Debug.LogWarning("没有找到玩家数据，playerId = " + playerId);
-            return;
+            FindLocalPlayer();
         }
 
-        attackText.text = player.attack.ToString();
-        manaText.text = player.mana.ToString();
-        scoreText.text = player.score.ToString();
+        if (localPlayer != null)
+        {
+            SetData(localPlayer.attack, localPlayer.mana, localPlayer.score);
+        }
+    }
+    private void FindLocalPlayer()
+    {
+        PlayerState[] players = FindObjectsOfType<PlayerState>();
+        foreach (PlayerState player in players)
+        {
+            if (player.isLocalPlayer)
+            {
+                localPlayer = player;
+                break;
+            }
+        }
+    }
+    public void SetData(int attack, int mana, int score)
+    {
+        if (attackText != null)
+            attackText.text = attack.ToString();
+
+        if (manaText != null)
+            manaText.text = mana.ToString();
+
+        if (scoreText != null)
+            scoreText.text = score.ToString();
     }
 
 }

@@ -9,17 +9,23 @@ public class MyNetworkRoomManager : NetworkRoomManager
 
     public GameObject startGameButton;
 
+    public int gamePlayerCount = 0;
+
+
     public override void Awake()
     {
         base.Awake();
-        if (Instance == null )
+        if (Instance == null)
         {
             Instance = this;
             DontDestroyOnLoad(gameObject);
         }
         else
         {
-            Destroy(gameObject);
+            if (gameObject != null)
+            {
+                Destroy(gameObject);
+            }
         }
     }
 
@@ -61,6 +67,7 @@ public class MyNetworkRoomManager : NetworkRoomManager
     #region UI°´Å¥ÀàÖ´ÐÐÂß¼­
     public void StartGame()
     {
+        gamePlayerCount = roomSlots.Count;
         ServerChangeScene(GameplayScene);
     }
 
@@ -69,6 +76,22 @@ public class MyNetworkRoomManager : NetworkRoomManager
         if(NetworkServer.active && Utils.IsSceneActive(GameplayScene))
         {
             ServerChangeScene(RoomScene);
+        }
+    }
+
+    public void ReturnToOffline()
+    {
+        if (NetworkServer.active && NetworkClient.isConnected)
+        {
+            StopHost();
+        }
+        else if (NetworkClient.isConnected)
+        {
+            StopClient();
+        }
+        else if (NetworkServer.active)
+        {
+            StopServer();
         }
     }
     #endregion
