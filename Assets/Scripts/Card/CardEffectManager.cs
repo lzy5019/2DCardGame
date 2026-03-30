@@ -19,11 +19,17 @@ public class CardEffectManager : MonoBehaviour
         Instance = this;
     }
 
-    public void ResolveCardEffect(string cardId, int id)
-    { 
-        switch(cardId)
+    public void ResolveCardEffect(int playerindex, string cardId)
+    {
+        PlayerState player = MatchManager.Instance.playerList[playerindex];
+        switch (cardId)
         {
-
+            case "00001":   // 学徒
+                player.AddMana(1);break;
+            case "00002":   // 民兵
+                player.AddAttack(1);break;
+            case "00003":   // 战士
+                player.AddAttack(2); break;
             default: break;
         }
     }

@@ -30,7 +30,7 @@ public class PlayerState : NetworkBehaviour
     [Header("本地玩家专属UI")]
     [SerializeField] private GameObject playerCanvas;
 
-    #region 初始化
+    #region ·————初始化————·
     [Server]
     public void InitPlayer(int index)
     {
@@ -86,23 +86,24 @@ public class PlayerState : NetworkBehaviour
     {
         base.OnStartLocalPlayer();
 
-        if (SteamManager.Initialized)
+        if (SteamManager.Initialized)       // 改名为steam的名字
         {
             string localSteamName = SteamFriends.GetPersonaName();
             string localSteamId = SteamUser.GetSteamID().ToString();
-
+            this.gameObject.name = localSteamName;
             CmdSetSteamProfile(localSteamName, localSteamId);
         }
 
-        if (HandDisplayManager.Instance != null)
+        if (HandDisplayManager.Instance != null)        // 注册手牌展示
         {
             HandDisplayManager.Instance.RegisterLocalPlayer(this);
         }
 
-        if (PlayerEndTurn.Instance != null)
+        if (PlayerEndTurn.Instance != null)             // 注册回合结束按钮
         {
             PlayerEndTurn.Instance.RegisterLocalPlayer(this);
         }
+
     }
     [Command]
     private void CmdSetSteamProfile(string newName, string newSteamId)
@@ -122,45 +123,7 @@ public class PlayerState : NetworkBehaviour
         }
     }
 
-    #region 资源修改
-    [Server]
-    public void AddGold(int amount)
-    {
-        mana += amount;
-    }
-
-    [Server]
-    public void AddGem(int amount)
-    {
-        attack += amount;
-    }
-
-    [Server]
-    public void AddScore(int amount)
-    {
-        score += amount;
-    }
-
-    [Server]
-    public bool SpendGold(int amount)
-    {
-        if (mana < amount) return false;
-
-        mana -= amount;
-        return true;
-    }
-
-    [Server]
-    public bool SpendGem(int amount)
-    {
-        if (attack < amount) return false;
-
-        attack -= amount;
-        return true;
-    }
-    #endregion
-
-    #region 回合控制
+    #region ·————回合控制————·
     [Server]
     public void StartTurn()
     {
@@ -211,10 +174,48 @@ public class PlayerState : NetworkBehaviour
     }
     #endregion
 
-    #region 牌堆操作
+    #region  ·————资源修改————·
+    [Server]
+    public void AddMana(int amount)
+    {
+        mana += amount;
+    }
+
+    [Server]
+    public void AddAttack(int amount)
+    {
+        attack += amount;
+    }
+
+    [Server]
+    public void AddScore(int amount)
+    {
+        score += amount;
+    }
+
+    [Server]
+    public bool SpendGold(int amount)
+    {
+        if (mana < amount) return false;
+
+        mana -= amount;
+        return true;
+    }
+
+    [Server]
+    public bool SpendGem(int amount)
+    {
+        if (attack < amount) return false;
+
+        attack -= amount;
+        return true;
+    }
+    #endregion
+
+    #region ·————牌堆操作————·
 
     // 从handcardUI接收请求出牌
-    #region 出牌
+    #region  ·——出牌——· 
     public void RequestPlayCard(int handIndex)      
     {
         if (!isLocalPlayer)
@@ -236,8 +237,7 @@ public class PlayerState : NetworkBehaviour
         PlayCardFromHand(cardId, handIndex);
         Debug.Log("打出："+cardId);
 
-        // 这里以后再补真正出牌效果
-        // 比如加入弃牌堆、触发效果、加资源之类
+        CardEffectManager.Instance.ResolveCardEffect(playerIndex, cardId);
     }
     #endregion
 
@@ -302,7 +302,6 @@ public class PlayerState : NetworkBehaviour
             drawPile[randomIndex] = temp;
         }
     }
-
     [Server]
     public void RebuildDrawPileFromDiscard()
     {
@@ -317,6 +316,7 @@ public class PlayerState : NetworkBehaviour
         ShuffleDrawPile();
     }
 
+    #region  ·——抽牌——·
     [Server]
     public string DrawOneCard()
     {
@@ -349,7 +349,8 @@ public class PlayerState : NetworkBehaviour
                 return;
         }
     }
-    
+    #endregion
+
     [Server]
     public bool PlayCardFromHand(string cardId, int index)         // 从手牌中打出
     {

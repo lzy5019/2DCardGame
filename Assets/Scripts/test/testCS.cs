@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
-public class testCurrentPlayer : MonoBehaviour
+public class testCS : MonoBehaviour
 {
     public Text debugText;
     public PlayerEndTurn endTurn;

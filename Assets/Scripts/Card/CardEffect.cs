@@ -6,11 +6,11 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Playables;
 
 public class CardEffect : MonoBehaviour
 {
     public static CardEffect Instance;
-
 
     private void Awake()
     {
@@ -26,14 +26,19 @@ public class CardEffect : MonoBehaviour
     // =========================
     // »ù´¡Ð§¹û
     // =========================
-    public void DrawCards(int amount)
+    public void DrawCards(PlayerState localPlayer,int amount)
     {
-
+        //localPlayer.CmdDrawCards(amount);
     }
 
-    
+    public void AddMana(PlayerState localPlayer, int amount)
+    {
+        //localPlayer.CmdAddMana(amount);
+    }
 
-
-
+    public void AddAttack(PlayerState localPlayer, int amount)
+    {
+        //localPlayer.CmdAddAttack(amount);
+    }
 
 }
