@@ -82,7 +82,7 @@ public class PlayerState : NetworkBehaviour
 
         base.OnStopServer();
     }
-    public override void OnStartLocalPlayer()       // 本机自动调用，同步名字和ID
+    public override void OnStartLocalPlayer()       // 本机自动调用，注册
     {
         base.OnStartLocalPlayer();
 
@@ -93,18 +93,10 @@ public class PlayerState : NetworkBehaviour
 
             CmdSetSteamProfile(localSteamName, localSteamId);
         }
-        else
-        {
-            Debug.LogWarning("SteamManager 尚未初始化，无法读取 Steam 名字和 SteamID");
-        }
 
         if (HandDisplayManager.Instance != null)
         {
             HandDisplayManager.Instance.RegisterLocalPlayer(this);
-        }
-        else
-        {
-            Debug.LogWarning("HandDisplayManager.Instance 是 null，本地手牌UI尚未准备好");
         }
 
         if (PlayerEndTurn.Instance != null)

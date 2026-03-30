@@ -1,3 +1,4 @@
+using Mirror;
 using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.UI;
@@ -9,7 +10,7 @@ public class PlayerEndTurn : MonoBehaviour
     public GameObject endTurnButtonObject;
     public Button endTurnButton;
 
-    private PlayerState localPlayer;
+    public PlayerState localPlayer = null;
 
     private void Awake()
     {

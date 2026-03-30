@@ -7,7 +7,7 @@ public class MatchManager : NetworkBehaviour
     public static MatchManager Instance;
 
     [Header("玩家列表")]
-    public List<PlayerState> playerList = new List<PlayerState>();
+    public readonly SyncList<PlayerState> playerList = new SyncList<PlayerState>();
 
     [Header("开局配置")]
     public List<string> startCards = new List<string>()
