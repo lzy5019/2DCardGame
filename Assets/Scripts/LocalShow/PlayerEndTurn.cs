@@ -33,6 +33,14 @@ public class PlayerEndTurn : MonoBehaviour
         RefreshButtonVisible();
     }
 
+    private void OnDestroy()
+    {
+        if (endTurnButton != null)
+        {
+            endTurnButton.onClick.RemoveListener(OnClickEndTurn);
+        }
+    }
+
     public void RegisterLocalPlayer(PlayerState playerState)
     {
         localPlayer = playerState;
@@ -42,6 +50,11 @@ public class PlayerEndTurn : MonoBehaviour
     private void Update()
     {
         RefreshButtonVisible();
+
+        if (Input.GetKeyDown(KeyCode.Space))
+        {
+            TryEndTurnByHotkey();
+        }
     }
 
     private void RefreshButtonVisible()
@@ -56,6 +69,16 @@ public class PlayerEndTurn : MonoBehaviour
         }
 
         endTurnButtonObject.SetActive(shouldShow);
+    }
+
+    private void TryEndTurnByHotkey()
+    {
+        if (localPlayer == null) return;
+        if (MatchManager.Instance == null) return;
+        if (!MatchManager.Instance.gameStarted) return;
+        if (!localPlayer.isMyTurn) return;
+
+        OnClickEndTurn();
     }
 
     private void OnClickEndTurn()

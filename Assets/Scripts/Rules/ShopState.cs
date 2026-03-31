@@ -17,7 +17,7 @@ public class ShopState : NetworkBehaviour
         "00003",
         "00004",
         "00005",
-        "",
+        "00000",
         ""
     };
 

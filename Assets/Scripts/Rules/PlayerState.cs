@@ -19,6 +19,7 @@ public class PlayerState : NetworkBehaviour
     [Header("×´Ì¬")]
     [SyncVar] public bool isReady = false;
     [SyncVar] public bool isMyTurn = false;
+    [SyncVar] public bool isWizard = false;
 
     [Header("ÅÆ¶ÑÊý¾Ý")]
     public readonly SyncList<string> drawPile = new SyncList<string>();
@@ -104,6 +105,10 @@ public class PlayerState : NetworkBehaviour
             PlayerEndTurn.Instance.RegisterLocalPlayer(this);
         }
 
+        if (ShopPanelUI.Instance != null)               // ×¢²áÉÌµêUI
+        {
+            ShopPanelUI.Instance.RegisterLocalPlayer(this);
+        }
     }
     [Command]
     private void CmdSetSteamProfile(string newName, string newSteamId)
@@ -136,6 +141,7 @@ public class PlayerState : NetworkBehaviour
         isMyTurn = false;
         mana = 0;
         attack = 0;
+        isWizard = false;
 
         for (int i = 0; i < playedCardIds.Count; i++)
         {
@@ -180,13 +186,11 @@ public class PlayerState : NetworkBehaviour
     {
         mana += amount;
     }
-
     [Server]
     public void AddAttack(int amount)
     {
         attack += amount;
     }
-
     [Server]
     public void AddScore(int amount)
     {
@@ -194,16 +198,15 @@ public class PlayerState : NetworkBehaviour
     }
 
     [Server]
-    public bool SpendGold(int amount)
+    public bool SpendMana(int amount)
     {
         if (mana < amount) return false;
 
         mana -= amount;
         return true;
     }
-
     [Server]
-    public bool SpendGem(int amount)
+    public bool SpendAttack(int amount)
     {
         if (attack < amount) return false;
 
@@ -241,6 +244,79 @@ public class PlayerState : NetworkBehaviour
     }
     #endregion
 
+    #region  ¡¤¡ª¡ªÂòÅÆ¡ª¡ª¡¤ 
+    public void RequestBuyCard(int slotIndex)
+    {
+        if (!isLocalPlayer) return;
+        if (!isMyTurn) return;
+
+        if (slotIndex < 5)
+        {
+            CmdRequestBuyCenterCard(slotIndex);
+        }
+        else
+        {
+            CmdRequestBuyBaseCard(slotIndex - 5);
+        }
+    }
+    [Command]
+    private void CmdRequestBuyCenterCard(int slotIndex)
+    {
+        PlayerState currentPlayer = MatchManager.Instance.GetCurrentPlayer();
+        if (currentPlayer != this) return;
+
+        string cardId = ShopState.Instance.centerCardIds[slotIndex];
+        CardData card = CardDatabase.Instance.GetCardById(cardId);
+        if (card.cardCategory == CardCategory.Monster)
+        {
+            if (SpendAttack(card.cost))
+            {
+                CardEffectManager.Instance.ResolveCardEffect(playerIndex ,cardId);
+            }
+            else { return; }
+        }
+        else
+        {
+            if (SpendMana(card.cost))
+            {
+                AddCardToOwned(cardId);
+                AddCardToDiscard(cardId);
+            }
+            else { return; }
+        }
+
+        ShopState.Instance.RemoveCenterCard(slotIndex);
+        Debug.Log(playerName + " ¹ºÂòÁËÖÐ³¡ÅÆ£º" + cardId + "  ²ÛÎ»£º" + slotIndex);
+    }
+    [Command]
+    private void CmdRequestBuyBaseCard(int baseIndex)
+    {
+        PlayerState currentPlayer = MatchManager.Instance.GetCurrentPlayer();
+        if (currentPlayer != this) return;
+
+        string cardId = ShopState.Instance.baseCardIds[baseIndex];
+        CardData card = CardDatabase.Instance.GetCardById(cardId);
+        if (card.cardCategory == CardCategory.Monster)
+        {
+            if (SpendAttack(card.cost))
+            {
+                currentPlayer.AddScore(1);
+            }
+            else { return; }
+        }
+        else if (card.cardCategory == CardCategory.Basic)
+        {
+            if (SpendMana(card.cost))
+            {
+                AddCardToOwned(cardId);
+                AddCardToDiscard(cardId);
+            }
+            else { return; }
+        }
+
+        Debug.Log(playerName + " ¹ºÂòÁË»ù´¡ÅÆ£º" + cardId + "  »ù´¡²ÛÎ»£º" + baseIndex);
+    }
+    
     [Server]
     public void AddCardToOwned(string cardId)
     {
@@ -248,7 +324,6 @@ public class PlayerState : NetworkBehaviour
 
         ownedCardIds.Add(cardId);
     }
-
     [Server]
     public void AddCardToDiscard(string cardId)
     {
@@ -256,7 +331,6 @@ public class PlayerState : NetworkBehaviour
 
         discardPile.Add(cardId);
     }
-
     [Server]
     public void AddCardToDrawPile(string cardId)
     {
@@ -264,6 +338,7 @@ public class PlayerState : NetworkBehaviour
 
         drawPile.Add(cardId);
     }
+    #endregion
 
     [Server]
     public void BuildStartDeck(List<string> startCards)
@@ -289,6 +364,8 @@ public class PlayerState : NetworkBehaviour
         ShuffleDrawPile();
         UpdateHandCount();
     }
+    
+
 
     [Server]
     public void ShuffleDrawPile()

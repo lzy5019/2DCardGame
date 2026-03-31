@@ -5,6 +5,8 @@ using System.Collections;
 
 public class ShopPanelUI : MonoBehaviour
 {
+    public static ShopPanelUI Instance;
+
     public GameObject baseShopPanel;
     public GameObject centerShopPanel;
 
@@ -14,9 +16,18 @@ public class ShopPanelUI : MonoBehaviour
     private ShopState shopState;
     private bool hasRegisteredCallback = false;
 
+    // 用于实现玩家商店选中功能
+    public ShopSlotUI currentSelectedSlot;
+    private PlayerState localPlayer = null;
+
     private void Awake()
     {
+        Instance = this;
         GetAllSlots();
+    }
+    public void RegisterLocalPlayer(PlayerState player)
+    {
+        localPlayer = player;
     }
 
     private void Start()
@@ -55,6 +66,7 @@ public class ShopPanelUI : MonoBehaviour
             centerSlots.AddRange(centerShopSlotArray);
         }
     }
+
     #region 监听事件触发函数
     private void RegisterCallback()
     {
@@ -96,6 +108,29 @@ public class ShopPanelUI : MonoBehaviour
     {
         RefreshCenterShop();
     }
+
+    public void OnSlotClicked(ShopSlotUI clickedSlot)
+    {
+        if (clickedSlot == null || clickedSlot.card == null) return;
+
+        // 第一次点击：选中
+        if (currentSelectedSlot != clickedSlot)
+        {
+            if (currentSelectedSlot != null)
+                currentSelectedSlot.SetSelected(false);
+
+            currentSelectedSlot = clickedSlot;
+            currentSelectedSlot.SetSelected(true);
+            return;
+        }
+         
+        // 第二次点击：购买
+        if (localPlayer == null) return;
+
+        localPlayer.RequestBuyCard(clickedSlot.slotIndex);
+        currentSelectedSlot.SetSelected(false);
+        currentSelectedSlot = null;
+    }
     #endregion
     private void RefreshCenterShop()        // 刷新商店显示
     {
@@ -112,7 +147,7 @@ public class ShopPanelUI : MonoBehaviour
             }
 
             centerSlots[i].SetCard(cardId);
-            centerSlots[i].slotIndex = i+5;
+            centerSlots[i].slotIndex = i;
         }
     }
     private void RefreshBaseShop()
@@ -129,7 +164,7 @@ public class ShopPanelUI : MonoBehaviour
             }
 
             baseSlots[i].SetCard(cardId);
-            baseSlots[i].slotIndex = i;
+            baseSlots[i].slotIndex = i+5;
         }
     }
 }
