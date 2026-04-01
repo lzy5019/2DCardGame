@@ -109,6 +109,16 @@ public class PlayerState : NetworkBehaviour
         {
             ShopPanelUI.Instance.RegisterLocalPlayer(this);
         }
+
+        if (PileBrowserUI.Instance != null)             // 注册查询面板
+        {
+            PileBrowserUI.Instance.RegisterLocalPlayer(this);
+        }
+
+        if (PileCountUI.Instance != null)               // 注册数值显示
+        {
+            PileCountUI.Instance.RegisterLocalPlayer(this);
+        }
     }
     [Command]
     private void CmdSetSteamProfile(string newName, string newSteamId)

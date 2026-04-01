@@ -1,13 +1,12 @@
 using UnityEngine;
 using UnityEngine.UI;
-using TMPro;
 
 public class PileCardItemUI : MonoBehaviour
 {
     public Image cardImage;
 
-    private string cardId;
-    private CardData cardData;
+    public string cardId;
+    public CardData cardData;
 
     public void SetCard(CardData data, string id)
     {

@@ -6,7 +6,7 @@ using UnityEngine.UI;
 
 public class PileBrowserUI : MonoBehaviour
 {
-    public static PileBrowserUI instance;
+    public static PileBrowserUI Instance;
 
     [Header("基础引用")]
     public GameObject cardPrefab;
@@ -16,7 +16,7 @@ public class PileBrowserUI : MonoBehaviour
     public Button closeButton;
     public GameObject emptyHintObject = null;
 
-    private PlayerState localPlayer;
+    public PlayerState localPlayer;
     private readonly List<GameObject> spawnedCards = new List<GameObject>();
 
     public bool IsOpen
@@ -27,14 +27,15 @@ public class PileBrowserUI : MonoBehaviour
         }
     }
 
+    #region ——初始化——
     private void Awake()
     {
-        if (instance != null && instance != this)
+        if (Instance != null && Instance != this)
         {
             Destroy(gameObject);
             return;
         }
-        instance = this;
+        Instance = this;
     }
 
     private void Start()
@@ -62,9 +63,9 @@ public class PileBrowserUI : MonoBehaviour
             closeButton.onClick.RemoveListener(ClosePile);
         }
 
-        if (instance == this)
+        if (Instance == this)
         {
-            instance = null;
+            Instance = null;
         }
     }
 
@@ -72,6 +73,7 @@ public class PileBrowserUI : MonoBehaviour
     {
         localPlayer = player;
     }
+    #endregion
 
     public void OpenPile(string title, List<string> cardIDs)
     {
@@ -82,7 +84,6 @@ public class PileBrowserUI : MonoBehaviour
         RebuildCards(cardIDs);
         pilePanel.gameObject.SetActive(true);
     }
-
     public void ClosePile()
     {
         if (pilePanel != null)
@@ -168,15 +169,70 @@ public class PileBrowserUI : MonoBehaviour
         spawnedCards.Clear();
     }
 
-    #region 按键绑定快捷函数
+    #region ——排列函数——
+    private List<string> GetDisplayList(List<string> source, PileDisplayOrder order)
+    {
+        List<string> result = new List<string>(source);
+
+        switch (order)
+        {
+            case PileDisplayOrder.KeepOriginal:
+                break;
+
+            case PileDisplayOrder.IdAscending:
+                result.Sort(CompareCardIdAscending);
+                break;
+
+            case PileDisplayOrder.IdDescending:
+                result.Sort(CompareCardIdDescending);
+                break;
+        }
+
+        return result;
+    }
+
+    private int CompareCardIdAscending(string a, string b)
+    {
+        bool aOk = int.TryParse(a, out int aNum);
+        bool bOk = int.TryParse(b, out int bNum);
+
+        if (aOk && bOk)
+            return aNum.CompareTo(bNum);
+
+        return string.Compare(a, b, System.StringComparison.Ordinal);
+    }
+
+    private int CompareCardIdDescending(string a, string b)
+    {
+        bool aOk = int.TryParse(a, out int aNum);
+        bool bOk = int.TryParse(b, out int bNum);
+
+        if (aOk && bOk)
+            return bNum.CompareTo(aNum);
+
+        return string.Compare(b, a, System.StringComparison.Ordinal);
+    }
+    #endregion
+
+    #region ——按键绑定快捷函数——
     public void OpenDrawPile()
     {
-        OpenPile("抽牌堆", new List<string>(localPlayer.drawPile));
+        List<string> displayList = GetDisplayList(
+            new List<string>(localPlayer.drawPile),
+            PileDisplayOrder.IdDescending
+        );
+
+        OpenPile("抽牌堆", displayList);
     }
 
     public void OpenDiscardPile()
     {
-        OpenPile("弃牌堆", new List<string>(localPlayer.discardPile));
+        List<string> displayList = GetDisplayList(
+            new List<string>(localPlayer.discardPile),
+            PileDisplayOrder.IdDescending
+        );
+
+        OpenPile("弃牌堆", displayList);
     }
 
     public void OpenHandPile()
@@ -186,12 +242,29 @@ public class PileBrowserUI : MonoBehaviour
 
     public void OpenPlayedPile()
     {
-        OpenPile("已打出", new List<string>(localPlayer.playedCardIds));
+        List<string> displayList = GetDisplayList(
+            new List<string>(localPlayer.playedCardIds),
+            PileDisplayOrder.KeepOriginal
+        );
+
+        OpenPile("本回合打出", displayList);
     }
 
     public void OpenOwnedPile()
     {
-        OpenPile("牌库总览", new List<string>(localPlayer.ownedCardIds));
+        List<string> displayList = GetDisplayList(
+            new List<string>(localPlayer.ownedCardIds),
+            PileDisplayOrder.IdDescending
+        );
+
+        OpenPile("牌库总览", displayList);
     }
     #endregion
+}
+
+public enum PileDisplayOrder
+{
+    KeepOriginal,   // 保持原顺序
+    IdAscending,    // 按ID从小到大
+    IdDescending    // 按ID从大到小
 }
