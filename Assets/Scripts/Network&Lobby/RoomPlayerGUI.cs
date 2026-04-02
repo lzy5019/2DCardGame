@@ -1,7 +1,5 @@
 using Mirror;
 using Steamworks;
-using System.Collections;
-using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -20,7 +18,7 @@ public class RoomPlayerGUI : MonoBehaviour
 
     GameObject playerlist;
     GameObject playerPanel;
-    NetworkRoomPlayer player;
+    MyNetworkRoomPlayer player;
 
     private void Start()
     {
@@ -49,7 +47,7 @@ public class RoomPlayerGUI : MonoBehaviour
     {
         if (playerName != null)
         {
-            playerName.text = playerPanel.name;
+            playerName.text = player.roomPlayerName;
         }
         if (readyState != null)
         {
@@ -67,11 +65,11 @@ public class RoomPlayerGUI : MonoBehaviour
 
     private void InitializeUI()
     {
-        player = GetComponent<NetworkRoomPlayer>();
-        player.gameObject.name = SteamFriends.GetPersonaName();
+        if (playerPanel != null) return;
+
+        player = GetComponent<MyNetworkRoomPlayer>();
         playerlist = GameObject.FindWithTag("PlayerList");
         playerPanel = Instantiate(playerPanelPrefab, playerlist.transform) as GameObject;
-        playerPanel.name = SteamFriends.GetPersonaName();
         readyBtn = playerPanel.transform.Find("Ready Button").GetComponent<Button>();
         cancelBtn = playerPanel.transform.Find("Cancel Button").GetComponent<Button>();
         removeBtn = playerPanel.transform.Find("Remove Button").GetComponent<Button>();

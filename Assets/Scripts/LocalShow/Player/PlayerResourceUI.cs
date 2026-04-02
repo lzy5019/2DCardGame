@@ -1,7 +1,7 @@
 using TMPro;
 using UnityEngine;
 
-public class PlayerDataDisplay : MonoBehaviour
+public class PlayerResourceUI : MonoBehaviour
 {
     [Header("UIÒýÓÃ")]
     [SerializeField] private TMP_Text attackText;

@@ -13,7 +13,7 @@ GameObject:
   - component: {fileID: 7506388466402307752}
   - component: {fileID: 6104467670812326749}
   m_Layer: 0
-  m_Name: Card Prefab
+  m_Name: Pile Card Prefab
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

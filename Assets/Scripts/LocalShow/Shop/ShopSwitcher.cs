@@ -14,14 +14,6 @@ public class ShopSwitcher : MonoBehaviour
         isShowingBase = false;
     }
 
-    private void Update()
-    {
-        if (Input.GetKeyDown(KeyCode.Tab))
-        {
-            SwitchShop();
-        }
-    }
-
     public void SwitchShop()
     {
         isShowingBase = !isShowingBase;

@@ -60,12 +60,10 @@ public class ShopSlotUI : MonoBehaviour, IPointerClickHandler
         if(selected)
         {
             transform.localScale = originalScale * selectedScaleMultiplier;
-            Debug.Log("开启高亮");
         }
         else
         {
             transform.localScale = originalScale;
-            Debug.Log("关闭高亮");
         }
     }
 }

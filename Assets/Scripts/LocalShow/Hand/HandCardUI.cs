@@ -34,7 +34,7 @@ public class HandCardUI : MonoBehaviour,
     [Header("拖拽效果")]
     public float dragScale = 1.2f;
     public bool resetRotationWhenDragging = true;
-    public float playThresholdY = 300f;
+    public float playThresholdY = 200f;
 
     public bool isHovering = false;     // 鼠标悬停
     public bool isDragging = false;     // 鼠标左键按住

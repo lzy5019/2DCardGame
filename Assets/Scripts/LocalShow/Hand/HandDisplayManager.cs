@@ -4,6 +4,7 @@
 /// </summary>
 
 using Mirror;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -21,6 +22,7 @@ public class HandDisplayManager : MonoBehaviour
     public float curveHeight = 5f;
 
     private readonly List<GameObject> cardObjects = new List<GameObject>();
+    private bool isWaitingFullRefresh = false;  // µ»¥˝À¢–¬∑¿÷π≥ÂÕª
 
     private void Awake()
     {
@@ -72,8 +74,49 @@ public class HandDisplayManager : MonoBehaviour
 
     private void OnHandCardsChanged(SyncList<string>.Operation op, int index, string item)
     {
-        RefreshHand();
+        if (isWaitingFullRefresh)
+        {
+            return;
+        }
+
+        switch (op)
+        {
+            case SyncList<string>.Operation.OP_ADD:
+                RearrangeAfterDraw();
+                break;
+
+            case SyncList<string>.Operation.OP_REMOVEAT:
+                if (index >= 0 && index < cardObjects.Count)
+                {
+                    RearrangeAfterPlay(index);
+                }
+                else
+                {
+                    RefreshHand();
+                }
+                break;
+
+            case SyncList<string>.Operation.OP_CLEAR:
+                if (!isWaitingFullRefresh)
+                {
+                    StartCoroutine(RefreshHandNextFrame());
+                }
+                return;
+            case SyncList<string>.Operation.OP_SET:
+            case SyncList<string>.Operation.OP_INSERT:
+            default:
+                RefreshHand();
+                break;
+        }
     }
+    private IEnumerator RefreshHandNextFrame()
+    {
+        isWaitingFullRefresh = true;
+        yield return null;
+        RefreshHand();
+        isWaitingFullRefresh = false;
+    }
+
     #endregion
 
     public void RefreshHand()       // À¢–¬ ÷≈∆œ‘ æ

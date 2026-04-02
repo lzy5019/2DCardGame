@@ -19,6 +19,8 @@ public class PileBrowserUI : MonoBehaviour
     public PlayerState localPlayer;
     private readonly List<GameObject> spawnedCards = new List<GameObject>();
 
+    private string currentPileKey = "";
+
     public bool IsOpen
     {
         get
@@ -75,6 +77,19 @@ public class PileBrowserUI : MonoBehaviour
     }
     #endregion
 
+    public void TogglePile(string pileKey, System.Action openAction)
+    {
+        if (IsOpen && currentPileKey == pileKey)
+        {
+            ClosePile();
+            currentPileKey = "";
+            return;
+        }
+
+        openAction.Invoke();
+        currentPileKey = pileKey;
+    }
+
     public void OpenPile(string title, List<string> cardIDs)
     {
         if (titleText != null)
@@ -90,6 +105,7 @@ public class PileBrowserUI : MonoBehaviour
         {
             pilePanel.gameObject.SetActive(false);
         }
+        currentPileKey = "";
     }
 
     private void RebuildCards(List<string> cardIDs)

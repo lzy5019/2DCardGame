@@ -3,21 +3,14 @@ using UnityEngine;
 public class SettingManager : MonoBehaviour
 {
     public GameObject settingCanvas;
-
-    private void Update()
+    public bool IsOpen
     {
-        if (Input.GetKeyDown(KeyCode.Escape))
+        get
         {
-            if (settingCanvas.activeSelf)
-            {
-                CloseSetting();
-            }
-            else
-            {
-                OpenSetting();
-            }
+            return settingCanvas != null && settingCanvas.gameObject.activeSelf;
         }
     }
+
     public void OpenSetting()
     {
         settingCanvas.SetActive(true);
