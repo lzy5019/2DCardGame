@@ -31,6 +31,14 @@ public class PlayerState : NetworkBehaviour
     [Header("本地玩家专属UI")]
     [SerializeField] private GameObject playerCanvas;
 
+    // 回调函数用
+    [Header("待处理选择")]
+    [SerializeField] private PendingSelectionType pendingSelectionType = PendingSelectionType.None;
+    private readonly List<int> pendingSelectionPayloads = new List<int>();  // 用于校验
+    private readonly List<int> localSelectionPayloads = new List<int>();    // 映射表：玩家选择→实际效果
+    private int pendingMinSelectCount = 1;
+    private int pendingMaxSelectCount = 1;
+
     #region ·————初始化————·
     [Server]
     public void InitPlayer(int index)
@@ -478,4 +486,145 @@ public class PlayerState : NetworkBehaviour
         handCount = handCardIds.Count;
     }
     #endregion
+
+    #region ·————卡牌回调————·
+    [Server]            // 处理选择入口，由CardEffectManager的ResolveCardEffect统一调用
+    public void BeginSelection(
+    PendingSelectionType selectionType,
+    string title,
+    int minCount,
+    int maxCount,
+    List<string> optionCardIds,
+    List<int> optionPayloads)
+    {
+        pendingSelectionType = selectionType;
+        pendingMinSelectCount = minCount;
+        pendingMaxSelectCount = maxCount;
+
+        pendingSelectionPayloads.Clear();
+        pendingSelectionPayloads.AddRange(optionPayloads);
+
+        TargetOpenSelection(
+            connectionToClient,
+            title,
+            minCount,
+            maxCount,
+            optionCardIds.ToArray(),
+            optionPayloads.ToArray()
+        );
+    }
+
+    [TargetRpc]         // 客户端本地，由服务器点名触发
+    private void TargetOpenSelection(
+    NetworkConnectionToClient target,
+    string title,
+    int minCount,
+    int maxCount,
+    string[] optionCardIds,
+    int[] optionPayloads)
+    {
+        if (SelectionUI.Instance == null || CardDatabase.Instance == null)
+            return;
+
+        localSelectionPayloads.Clear();
+        localSelectionPayloads.AddRange(optionPayloads);
+
+        List<Sprite> optionSprites = new List<Sprite>();
+
+        for (int i = 0; i < optionCardIds.Length; i++)
+        {
+            string cardId = optionCardIds[i];
+            if (string.IsNullOrEmpty(cardId))
+                continue;
+
+            CardData cardData = CardDatabase.Instance.GetCardById(cardId);
+            if (cardData == null || cardData.cardSprite == null)
+                continue;
+
+            optionSprites.Add(cardData.cardSprite);
+        }
+
+        if (optionSprites.Count == 0)
+            return;
+
+        SelectionUI.Instance.ShowSelection(
+            title,
+            optionSprites,
+            minCount,
+            maxCount,
+            OnSelectionConfirmed
+        );
+    }
+
+    private void OnSelectionConfirmed(List<int> selectedIndexes)    // 回调函数，把UI选项映射为真实选项
+    {
+        if (selectedIndexes == null || selectedIndexes.Count == 0)
+            return;
+
+        List<int> selectedPayloads = new List<int>();
+
+        for (int i = 0; i < selectedIndexes.Count; i++)
+        {
+            int optionIndex = selectedIndexes[i];
+
+            if (optionIndex < 0 || optionIndex >= localSelectionPayloads.Count)
+                return;
+
+            selectedPayloads.Add(localSelectionPayloads[optionIndex]);
+        }
+
+        CmdSubmitSelection(selectedPayloads.ToArray());
+    }
+
+    [Command]
+    private void CmdSubmitSelection(int[] selectedPayloads)         // 负责执行抉择后的效果
+    {
+        if (pendingSelectionType == PendingSelectionType.None)
+            return;
+
+        if (selectedPayloads == null || selectedPayloads.Length == 0)
+            return;
+
+        switch (pendingSelectionType)
+        {
+            case PendingSelectionType.WizardDiscardOneCenterCard:
+                {
+                    int slotIndex = selectedPayloads[0];
+
+                    if (ShopState.Instance == null)
+                        return;
+
+                    if (slotIndex < 0 || slotIndex >= ShopState.Instance.centerCardIds.Count)
+                        return;
+
+                    string cardId = ShopState.Instance.centerCardIds[slotIndex];
+                    if (string.IsNullOrEmpty(cardId))
+                        return;
+
+                    ShopState.Instance.DiscardCenterCard(slotIndex);
+
+                    if (!isWizard)
+                    {
+                        DrawCards(1);
+                        isWizard = true;
+                    }
+
+                    break;
+                }
+        }
+
+        pendingSelectionType = PendingSelectionType.None;
+        pendingSelectionPayloads.Clear();
+        pendingMinSelectCount = 1;
+        pendingMaxSelectCount = 1;
+    }
+
+
+    #endregion
+}
+
+public enum PendingSelectionType
+{
+    None,
+    WizardDiscardOneCenterCard    // 00004术士
 }

@@ -1,3 +1,4 @@
+using System.Collections;
 using Mirror;
 using TMPro;
 using UnityEngine;
@@ -6,12 +7,13 @@ public class PileCountUI : MonoBehaviour
 {
     public static PileCountUI Instance;
 
-    [Header("牌堆数量文本")]
-    public TMP_Text discardPileText;   // 洗牌堆
-    public TMP_Text drawPileText;      // 抽牌堆
-    public TMP_Text playedPileText;    // 打出的牌堆
+    [Header("Pile Count Text")]
+    public TMP_Text discardPileText;
+    public TMP_Text drawPileText;
+    public TMP_Text playedPileText;
 
     public PlayerState localPlayer;
+    private Coroutine delayedRefreshCoroutine;
 
     private void Awake()
     {
@@ -26,6 +28,14 @@ public class PileCountUI : MonoBehaviour
 
     private void OnDestroy()
     {
+        UnbindCallbacks();
+
+        if (delayedRefreshCoroutine != null)
+        {
+            StopCoroutine(delayedRefreshCoroutine);
+            delayedRefreshCoroutine = null;
+        }
+
         if (Instance == this)
         {
             Instance = null;
@@ -62,6 +72,29 @@ public class PileCountUI : MonoBehaviour
 
     private void OnPileListChanged(SyncList<string>.Operation op, int itemIndex, string oldItem, string newItem)
     {
+        if (op == SyncList<string>.Operation.OP_CLEAR)
+        {
+            QueueRefreshNextFrame();
+            return;
+        }
+
+        RefreshCounts();
+    }
+
+    private void QueueRefreshNextFrame()
+    {
+        if (delayedRefreshCoroutine != null)
+        {
+            StopCoroutine(delayedRefreshCoroutine);
+        }
+
+        delayedRefreshCoroutine = StartCoroutine(RefreshCountsNextFrame());
+    }
+
+    private IEnumerator RefreshCountsNextFrame()
+    {
+        yield return null;
+        delayedRefreshCoroutine = null;
         RefreshCounts();
     }
 
@@ -93,5 +126,4 @@ public class PileCountUI : MonoBehaviour
             playedPileText.text = playedCount.ToString();
         }
     }
-
 }

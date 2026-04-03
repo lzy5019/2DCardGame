@@ -13,13 +13,19 @@ public class ShopSlotUI : MonoBehaviour, IPointerClickHandler
 
     // œ‘ æ…Ë÷√
     private Vector3 originalScale;
-    [SerializeField] private float selectedScaleMultiplier = 1.15f;
+    [SerializeField] private float selectedScaleMultiplier = 1.05f;
+    [SerializeField] private GameObject selectedFxObject;
 
     private void Awake()
     {
         cardImage = GetComponent<Image>();
         panel = GetComponentInParent<ShopPanelUI>();
         originalScale = transform.localScale;
+
+        if (selectedFxObject != null)
+        {
+            selectedFxObject.SetActive(false);
+        }
     }
 
     public void SetCard(string cardId)
@@ -57,7 +63,12 @@ public class ShopSlotUI : MonoBehaviour, IPointerClickHandler
 
     public void SetSelected(bool selected)
     {
-        if(selected)
+        if (selectedFxObject != null)
+        {
+            selectedFxObject.SetActive(selected);
+        }
+
+        if (selected)
         {
             transform.localScale = originalScale * selectedScaleMultiplier;
         }

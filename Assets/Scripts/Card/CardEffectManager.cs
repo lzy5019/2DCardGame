@@ -1,4 +1,5 @@
 using Mirror;
+using System.Collections.Generic;
 using UnityEngine;
 
 public class CardEffectManager : NetworkBehaviour
@@ -37,12 +38,48 @@ public class CardEffectManager : NetworkBehaviour
                 player.AddMana(2); break;
 
             case "00005":   // 术士
-                if (!player.isWizard)
                 {
-                    player.isWizard = true;
-                    player.DrawCards(1);
+                    if (ShopState.Instance == null)
+                        break;
+
+                    List<string> optionCardIds = new List<string>();
+                    List<int> optionPayloads = new List<int>();     // 真实值列表
+
+                    for (int i = 0; i < ShopState.Instance.centerCardIds.Count; i++)
+                    {
+                        string centerCardId = ShopState.Instance.centerCardIds[i];
+                        if (string.IsNullOrEmpty(centerCardId))
+                            continue;
+
+                        CardData centerCardData = CardDatabase.Instance.GetCardById(centerCardId);
+                        if (centerCardData == null || centerCardData.cardSprite == null)
+                            continue;
+
+                        optionCardIds.Add(centerCardId);
+                        optionPayloads.Add(i);
+                    }
+
+                    if (optionCardIds.Count == 0)
+                    {
+                        if (!player.isWizard)
+                        {
+                            player.DrawCards(1);
+                            player.isWizard = true;
+                        }
+                        break;
+                    }
+
+                    player.BeginSelection(
+                        PendingSelectionType.WizardDiscardOneCenterCard,
+                        "选择 1 张牌 弃置",
+                        1,
+                        1,
+                        optionCardIds,
+                        optionPayloads
+                    );
+
+                    break;
                 }
-                break;
 
             case "01002":   // 陈计神
                 player.AddAttack(6);break;
@@ -60,3 +97,5 @@ public class CardEffectManager : NetworkBehaviour
         }
     }
 }
+
+

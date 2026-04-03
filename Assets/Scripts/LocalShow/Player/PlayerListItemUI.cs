@@ -8,6 +8,7 @@ public class PlayerListItemUI : MonoBehaviour
     [SerializeField] private TMP_Text attackText;
     [SerializeField] private TMP_Text scoreText;
     [SerializeField] private TMP_Text handCardNumText;
+    [SerializeField] private GameObject highLight;
 
     private float refreshInterval = 0.2f;
     private PlayerState targetPlayer;
@@ -33,10 +34,16 @@ public class PlayerListItemUI : MonoBehaviour
 
     public void RefreshView()
     {
+        if (targetPlayer == null) return;
+
         nameText.text = targetPlayer.playerName;
         manaText.text = targetPlayer.mana.ToString();
         attackText.text = targetPlayer.attack.ToString();
         scoreText.text = targetPlayer.score.ToString();
         handCardNumText.text = targetPlayer.handCount.ToString();
+        if (highLight != null)
+        {
+            highLight.SetActive(targetPlayer.isMyTurn);
+        }
     }
 }

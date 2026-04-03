@@ -127,11 +127,60 @@ public class ShopPanelUI : MonoBehaviour
         // 第二次点击：购买
         if (localPlayer == null) return;
 
+        if (!CanAffordCardLocal(clickedSlot))
+        {
+            return;
+        }
+
         localPlayer.RequestBuyCard(clickedSlot.slotIndex);
         currentSelectedSlot.SetSelected(false);
         currentSelectedSlot = null;
     }
     #endregion
+
+    private bool CanAffordCardLocal(ShopSlotUI slot)        // 发送提示通知
+    {
+        if (slot == null || slot.card == null || localPlayer == null)
+        {
+            return false;
+        }
+
+        if (!localPlayer.isMyTurn)
+        {
+            HintManager.Instance.ShowHint("不是我的回合");
+            return false;
+        }
+
+        CardData card = slot.card;
+
+        if (card.cardCategory == CardCategory.Monster)
+        {
+            if (localPlayer.attack < card.cost)
+            {
+                if (HintManager.Instance != null)
+                {
+                    HintManager.Instance.ShowHint("攻击不足");
+                }
+
+                return false;
+            }
+        }
+        else
+        {
+            if (localPlayer.mana < card.cost)
+            {
+                if (HintManager.Instance != null)
+                {
+                    HintManager.Instance.ShowHint("费用不足");
+                }
+
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     private void RefreshCenterShop()        // 刷新商店显示
     {
         if (shopState == null) return;

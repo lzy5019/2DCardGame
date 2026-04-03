@@ -132,4 +132,18 @@ public class ShopState : NetworkBehaviour
         centerCardIds[slotIndex] = "";
         FillCenterCards();
     }
+    [Server]
+    public void DiscardCenterCard(int slotIndex)
+    {
+        if (slotIndex < 0 || slotIndex >= centerCardIds.Count)
+            return;
+
+        string cardId = centerCardIds[slotIndex];
+        if (string.IsNullOrEmpty(cardId))
+            return;
+
+        discardPile.Add(cardId);
+        centerCardIds[slotIndex] = "";
+        FillCenterCards();
+    }
 }
