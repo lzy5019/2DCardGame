@@ -2,6 +2,7 @@ using Mirror;
 using System.Collections.Generic;
 using UnityEngine;
 using Steamworks;
+using System;
 
 public class PlayerState : NetworkBehaviour
 {
@@ -27,6 +28,11 @@ public class PlayerState : NetworkBehaviour
     public readonly SyncList<string> handCardIds = new SyncList<string>();
     public readonly SyncList<string> playedCardIds = new SyncList<string>();
     public readonly SyncList<string> ownedCardIds = new SyncList<string>();
+    public readonly SyncList<string> equippedCardIds = new SyncList<string>();      // 装备
+    public readonly SyncList<bool> equippedCardUsedFlags = new SyncList<bool>();    // 装备是否被使用
+    [SyncVar] public string equippedWeaponCardId = "";
+    [SyncVar] public bool equippedWeaponUsed = false;
+    public readonly SyncList<string> playedEquipmentIds = new SyncList<string>();
 
     [Header("本地玩家专属UI")]
     [SerializeField] private GameObject playerCanvas;
@@ -67,6 +73,10 @@ public class PlayerState : NetworkBehaviour
         handCardIds.Clear();
         playedCardIds.Clear();
         ownedCardIds.Clear();
+        equippedCardIds.Clear();
+        equippedCardUsedFlags.Clear();
+        equippedWeaponCardId = "";
+        equippedWeaponUsed = false;
     }
     public override void OnStartServer()
     {
@@ -127,6 +137,11 @@ public class PlayerState : NetworkBehaviour
         {
             PileCountUI.Instance.RegisterLocalPlayer(this);
         }
+
+        if (EquipmentZoneUI.Instance != null)
+        {
+            EquipmentZoneUI.Instance.RegisterLocalPlayer(this);
+        }
     }
     [Command]
     private void CmdSetSteamProfile(string newName, string newSteamId)
@@ -151,11 +166,19 @@ public class PlayerState : NetworkBehaviour
     public void StartTurn()
     {
         isMyTurn = true;
+        for (int i = 0; i < equippedCardUsedFlags.Count; i++)
+        {
+            equippedCardUsedFlags[i] = false;
+        }
+
+        equippedWeaponUsed = false;
     }
 
     [Server]
     public void EndTurn()
     {
+        CancelPendingSelection();
+
         isMyTurn = false;
         mana = 0;
         attack = 0;
@@ -167,6 +190,7 @@ public class PlayerState : NetworkBehaviour
         }
 
         playedCardIds.Clear();
+        playedEquipmentIds.Clear();
 
         for (int i = 0; i < handCardIds.Count; i++)
         {
@@ -181,6 +205,15 @@ public class PlayerState : NetworkBehaviour
     public void RequestEndTurn()
     {
         if (!isLocalPlayer) return;
+
+        if (SelectionUI.Instance != null && SelectionUI.Instance.isSelecting)
+        {
+            if (HintManager.Instance != null)
+            {
+                HintManager.Instance.ShowHint("请先完成当前选择");
+            }
+            return;
+        }
 
         CmdRequestEndTurn();
     }
@@ -243,8 +276,23 @@ public class PlayerState : NetworkBehaviour
             return;
 
         if (!isMyTurn)
+        {
+            if (HintManager.Instance != null)
+            {
+                HintManager.Instance.ShowHint("不是你的回合");
+            }
             return;
+        }
 
+        if (SelectionUI.Instance != null && SelectionUI.Instance.isSelecting)
+        {
+            if (HintManager.Instance != null)
+            {
+                HintManager.Instance.ShowHint("请先完成当前选择");
+            }
+            return;
+        }
+        
         CmdRequestPlayCard(handIndex);
     }
     [Command]
@@ -254,11 +302,30 @@ public class PlayerState : NetworkBehaviour
         if (handIndex < 0 || handIndex >= handCardIds.Count) return;
 
         string cardId = handCardIds[handIndex];
+        if (string.IsNullOrEmpty(cardId)) return;
+        if (CardDatabase.Instance == null) return;
 
-        PlayCardFromHand(cardId, handIndex);
-        Debug.Log("打出："+cardId);
+        CardData card = CardDatabase.Instance.GetCardById(cardId);
+        if (card == null) return;
 
-        CardEffectManager.Instance.ResolveCardEffect(playerIndex, cardId);
+        switch (card.cardType)
+        {
+            case CardType.Equipment:
+                EquipCardFromHand(cardId, handIndex);
+                Debug.Log("装备：" + cardId);
+                break;
+
+            case CardType.Weapon:
+                EquipWeaponFromHand(cardId, handIndex);
+                Debug.Log("装备武器：" + cardId);
+                break;
+
+            default:
+                PlayCardFromHand(cardId, handIndex);
+                Debug.Log("打出：" + cardId);
+                CardEffectManager.Instance.ResolveCardEffect(playerIndex, cardId);
+                break;
+        }
     }
     #endregion
 
@@ -390,7 +457,7 @@ public class PlayerState : NetworkBehaviour
     {
         for (int i = 0; i < drawPile.Count; i++)
         {
-            int randomIndex = Random.Range(i, drawPile.Count);
+            int randomIndex = UnityEngine.Random.Range(i, drawPile.Count);
 
             string temp = drawPile[i];
             drawPile[i] = drawPile[randomIndex];
@@ -459,6 +526,48 @@ public class PlayerState : NetworkBehaviour
     }
 
     [Server]
+    private void EquipCardFromHand(string cardId, int handIndex)        // 装备
+    {
+        if (string.IsNullOrEmpty(cardId)) return;
+
+        handCardIds.RemoveAt(handIndex);
+
+        equippedCardIds.Add(cardId);
+        equippedCardUsedFlags.Add(false);
+        playedEquipmentIds.Add(cardId);
+        UpdateHandCount();
+
+        CardEffectManager.Instance.ResolveEquipEnterEffect(playerIndex, cardId);
+    }
+
+    [Server]
+    private void EquipWeaponFromHand(string cardId, int handIndex)      // 武器
+    {
+        if (string.IsNullOrEmpty(cardId)) return;
+
+        handCardIds.RemoveAt(handIndex);
+
+        if (!string.IsNullOrEmpty(equippedWeaponCardId))
+        {
+            string oldWeaponCardId = equippedWeaponCardId;
+
+            equippedWeaponCardId = "";
+            equippedWeaponUsed = false;
+
+            discardPile.Add(oldWeaponCardId);
+            CardEffectManager.Instance.ResolveEquipLeaveToDiscardEffect(playerIndex, cardId);
+        }
+
+        equippedWeaponCardId = cardId;
+        equippedWeaponUsed = false;
+        playedEquipmentIds.Add(cardId);
+
+        UpdateHandCount();
+
+        CardEffectManager.Instance.ResolveEquipEnterEffect(playerIndex, cardId);
+    }
+
+    [Server]
     public bool RemoveCardFromHand(string cardId)       // 从手牌中放逐
     {
         if (string.IsNullOrEmpty(cardId)) return false;
@@ -484,6 +593,49 @@ public class PlayerState : NetworkBehaviour
     private void UpdateHandCount()
     {
         handCount = handCardIds.Count;
+    }
+    #endregion
+
+    #region ·————装备武器调用————·
+    public void RequestUseWeapon()
+    {
+        if (!isLocalPlayer) return;
+        if (!isMyTurn) return;
+
+        if (SelectionUI.Instance != null && SelectionUI.Instance.isSelecting)
+            return;
+
+        CmdRequestUseWeapon();
+    }
+    [Command]
+    private void CmdRequestUseWeapon()
+    {
+        if (!isMyTurn) return;
+        if (string.IsNullOrEmpty(equippedWeaponCardId)) return;
+        if (equippedWeaponUsed) return;
+
+        CardEffectManager.Instance.ResolveWeaponUseEffect(playerIndex, equippedWeaponCardId);
+    }
+
+    public void RequestUseEquipment(int equipmentIndex)
+    {
+        if (!isLocalPlayer) return;
+        if (!isMyTurn) return;
+
+        if (SelectionUI.Instance != null && SelectionUI.Instance.isSelecting)
+            return;
+
+        CmdRequestUseEquipment(equipmentIndex);
+    }
+    [Command]
+    private void CmdRequestUseEquipment(int equipmentIndex)
+    {
+        if (!isMyTurn) return;
+        if (equipmentIndex < 0 || equipmentIndex >= equippedCardIds.Count) return;
+        if (equipmentIndex < equippedCardUsedFlags.Count && equippedCardUsedFlags[equipmentIndex]) return;
+
+        string cardId = equippedCardIds[equipmentIndex];
+        CardEffectManager.Instance.ResolveEquipUseEffect(playerIndex, cardId, equipmentIndex);
     }
     #endregion
 
@@ -581,7 +733,10 @@ public class PlayerState : NetworkBehaviour
     {
         if (pendingSelectionType == PendingSelectionType.None)
             return;
-
+        if (MatchManager.Instance == null) return;
+        if (!MatchManager.Instance.gameStarted) return;
+        if (MatchManager.Instance.GetCurrentPlayer() != this) return;
+        if (!isMyTurn) return;
         if (selectedPayloads == null || selectedPayloads.Length == 0)
             return;
 
@@ -619,7 +774,30 @@ public class PlayerState : NetworkBehaviour
         pendingMaxSelectCount = 1;
     }
 
+    [Server]
+    public void CancelPendingSelection()            // 回合结束自动取消选择事件
+    {
+        pendingSelectionType = PendingSelectionType.None;
+        pendingSelectionPayloads.Clear();
+        pendingMinSelectCount = 1;
+        pendingMaxSelectCount = 1;
 
+        if (connectionToClient != null)
+        {
+            TargetCancelSelection(connectionToClient);
+        }
+    }
+
+    [TargetRpc]
+    private void TargetCancelSelection(NetworkConnectionToClient target)
+    {
+        if (SelectionUI.Instance != null)
+        {
+            SelectionUI.Instance.CloseSelection();
+        }
+
+        localSelectionPayloads.Clear();
+    }
     #endregion
 }
 

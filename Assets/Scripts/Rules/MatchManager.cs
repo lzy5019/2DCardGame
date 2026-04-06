@@ -28,6 +28,12 @@ public class MatchManager : NetworkBehaviour
     [SyncVar] public bool gameStarted = false;
     [SyncVar] public int currentTurnPlayerIndex = -1;
 
+    [Header("回合计时")]
+    [SerializeField] private float turnDurationSeconds = 60f;
+    [SyncVar] public double currentTurnEndTime;
+    [SyncVar] private bool turnTimerRunning;
+    private bool isEndingTurn;
+
     private void Awake()
     {
         if (Instance != null && Instance != this)
@@ -37,6 +43,19 @@ public class MatchManager : NetworkBehaviour
         }
 
         Instance = this;
+    }
+
+    [ServerCallback]
+    private void Update()
+    {
+        if (!gameStarted) return;
+        if (!turnTimerRunning) return;
+        if (currentTurnPlayerIndex < 0 || currentTurnPlayerIndex >= playerList.Count) return;
+
+        if (NetworkTime.time >= currentTurnEndTime)
+        {
+            EndCurrentTurn();
+        }
     }
 
     #region 玩家注册
@@ -105,6 +124,9 @@ public class MatchManager : NetworkBehaviour
         PlayerState currentPlayer = playerList[currentTurnPlayerIndex];
         if (currentPlayer == null) return;
 
+        currentTurnEndTime = NetworkTime.time + turnDurationSeconds;
+        turnTimerRunning = true;
+
         currentPlayer.StartTurn();
         Debug.Log("开始玩家回合：" + currentPlayer.playerName);
     }
@@ -119,8 +141,16 @@ public class MatchManager : NetworkBehaviour
         PlayerState currentPlayer = playerList[currentTurnPlayerIndex];
         if (currentPlayer == null) return;
 
+        if (isEndingTurn) return;
+        isEndingTurn = true;
+
+        turnTimerRunning = false;
+        currentTurnEndTime = 0;
+
         currentPlayer.EndTurn();
         NextTurn();
+
+        isEndingTurn = false;
     }
 
     [Server]

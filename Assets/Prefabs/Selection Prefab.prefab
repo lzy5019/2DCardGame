@@ -13,6 +13,7 @@ GameObject:
   - component: {fileID: 7642460374558736170}
   - component: {fileID: 3432178011426131964}
   - component: {fileID: 3181864121602178353}
+  - component: {fileID: 3129587822704424537}
   m_Layer: 0
   m_Name: Selection Prefab
   m_TagString: Untagged
@@ -138,6 +139,18 @@ MonoBehaviour:
   outlineObject: {fileID: 3287860344427879033}
   button: {fileID: 3432178011426131964}
   optionIndex: 0
+--- !u!114 &3129587822704424537
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3050015741622740155}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 203fb18eacbd5104db7849425206d39d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &3287860344427879033
 GameObject:
   m_ObjectHideFlags: 0

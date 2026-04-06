@@ -105,7 +105,6 @@ public class SelectionUI : MonoBehaviour
             Debug.LogWarning("SelectionUI: optionSprites 为空，无法打开选择面板。");
             return;
         }
-
         if (titleText != null)
         {
             titleText.text = title;
@@ -171,7 +170,9 @@ public class SelectionUI : MonoBehaviour
         else
         {
             if (selectedIndexes.Count >= maxSelectCount)
-                return;
+            {
+                selectedIndexes.RemoveAt(0);
+            }
 
             selectedIndexes.Add(optionIndex);
         }

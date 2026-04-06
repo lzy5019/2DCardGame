@@ -71,7 +71,7 @@ public class CardEffectManager : NetworkBehaviour
 
                     player.BeginSelection(
                         PendingSelectionType.WizardDiscardOneCenterCard,
-                        "选择 1 张牌 弃置",
+                        "选择 1 张牌 放逐",
                         1,
                         1,
                         optionCardIds,
@@ -94,6 +94,66 @@ public class CardEffectManager : NetworkBehaviour
 
 
             default: break;
+        }
+    }
+
+    [Server]
+    public void ResolveEquipEnterEffect(int playerIndex, string cardId)
+    {
+        if (playerIndex < 0) return;
+        PlayerState player = MatchManager.Instance.playerList[playerIndex];
+
+        switch (cardId)
+        {
+
+
+            default:
+                break;
+        }
+    }
+
+    [Server]    // 使用装备
+    public void ResolveEquipUseEffect(int playerIndex, string cardId, int equipmentIndex)
+    {
+        if (playerIndex < 0) return;
+        PlayerState player = MatchManager.Instance.playerList[playerIndex];
+
+        switch (cardId)
+        {
+            case "01015":
+                player.AddAttack(1);
+                player.equippedCardUsedFlags[equipmentIndex] = true;
+                break;
+
+            default:
+                break;
+        }
+    }
+
+    [Server]    // 使用武器
+    public void ResolveWeaponUseEffect(int playerIndex, string cardId)
+    {
+        if (playerIndex < 0) return;
+        PlayerState player = MatchManager.Instance.playerList[playerIndex];
+        if (player == null) return;
+
+        switch (cardId)
+        {
+            default:
+                break;
+        }
+    }
+
+    [Server]    // 装备离开装备区
+    public void ResolveEquipLeaveToDiscardEffect(int playerIndex, string cardId)
+    {
+        if (playerIndex < 0) return;
+        PlayerState player = MatchManager.Instance.playerList[playerIndex];
+
+        switch (cardId)
+        {
+            default:
+                break;
         }
     }
 }
