@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
@@ -7,15 +7,15 @@ public class HintManager : MonoBehaviour
 {
     public static HintManager Instance { get; private set; }
 
-    [Header("References")]
+    [Header("引用")]
     [SerializeField] private RectTransform hintPanel;
     [SerializeField] private TMP_Text hintTemplate;
 
-    [Header("Timing")]
+    [Header("时间设置")]
     [SerializeField] private float visibleDuration = 0.9f;
     [SerializeField] private float fadeDuration = 0.5f;
 
-    [Header("Motion")]
+    [Header("动画设置")]
     [SerializeField] private float moveUpDistance = 30f;
 
     private readonly List<HintEntry> activeHints = new List<HintEntry>();
@@ -145,4 +145,7 @@ public class HintManager : MonoBehaviour
         public Coroutine coroutine;
         public Vector2 startAnchoredPosition;
     }
+
+
 }
+

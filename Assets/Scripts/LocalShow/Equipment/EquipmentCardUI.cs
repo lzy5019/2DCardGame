@@ -1,22 +1,27 @@
-using TMPro;
+﻿using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
 public class EquipmentCardUI : MonoBehaviour
 {
-    [Header("��������")]
+    #region 界面引用
+    [Header("界面引用")]
     [SerializeField] private Image cardImage;
     [SerializeField] private Button button;
 
-    [Header("״̬��ʾ")]
+    [Header("状态显示")]
     [SerializeField] private GameObject highlightObject;
     [SerializeField] private GameObject usedMaskObject;
     [SerializeField] private TMP_Text typeText;
+    #endregion
 
+    #region 运行时状态
     private string cardId;
     private bool isWeapon;
     private int equipmentIndex = -1;
+    #endregion
 
+    #region 初始化
     public void Setup(string newCardId, CardData cardData, bool weapon, int index, bool isUsed, bool canUse)
     {
         cardId = newCardId;
@@ -31,7 +36,7 @@ public class EquipmentCardUI : MonoBehaviour
 
         if (typeText != null)
         {
-            typeText.text = isWeapon ? "����" : "װ��";
+            typeText.text = isWeapon ? "Weapon" : "Equipment";
         }
 
         SetUsed(isUsed);
@@ -44,7 +49,9 @@ public class EquipmentCardUI : MonoBehaviour
             button.onClick.AddListener(OnClickUse);
         }
     }
+    #endregion
 
+    #region 视觉状态
     public void SetUsed(bool isUsed)
     {
         if (usedMaskObject != null)
@@ -70,7 +77,9 @@ public class EquipmentCardUI : MonoBehaviour
             button.interactable = canUse;
         }
     }
+    #endregion
 
+    #region 按钮事件
     private void OnClickUse()
     {
         if (EquipmentZoneUI.Instance == null)
@@ -85,4 +94,6 @@ public class EquipmentCardUI : MonoBehaviour
             EquipmentZoneUI.Instance.RequestUseEquipmentFromUI(equipmentIndex);
         }
     }
+    #endregion
 }
+

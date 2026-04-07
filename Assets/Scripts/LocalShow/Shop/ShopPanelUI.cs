@@ -1,33 +1,33 @@
+ï»¿using System.Collections;
 using System.Collections.Generic;
-using UnityEngine;
 using Mirror;
-using System.Collections;
+using UnityEngine;
 
 public class ShopPanelUI : MonoBehaviour
 {
     public static ShopPanelUI Instance;
 
+    #region ç•Œé¢å¼•ç”¨
     public GameObject baseShopPanel;
     public GameObject centerShopPanel;
-
     public List<ShopSlotUI> baseSlots = new List<ShopSlotUI>();
     public List<ShopSlotUI> centerSlots = new List<ShopSlotUI>();
+    #endregion
 
+    #region è¿è¡Œæ—¶çŠ¶æ€
     private ShopState shopState;
     private bool hasRegisteredCallback = false;
 
-    // ÓÃÓÚÊµÏÖÍæ¼ÒÉÌµêÑ¡ÖĞ¹¦ÄÜ
+    // è®°å½•å½“å‰é€‰ä¸­çš„æ§½ä½ï¼Œä»¥ä¾¿ç¬¬äºŒæ¬¡ç‚¹å‡»æ—¶ç¡®è®¤è´­ä¹°ã€‚
     public ShopSlotUI currentSelectedSlot;
     private PlayerState localPlayer = null;
+    #endregion
 
+    #region ç”Ÿå‘½å‘¨æœŸ
     private void Awake()
     {
         Instance = this;
         GetAllSlots();
-    }
-    public void RegisterLocalPlayer(PlayerState player)
-    {
-        localPlayer = player;
     }
 
     private void Start()
@@ -35,7 +35,19 @@ public class ShopPanelUI : MonoBehaviour
         StartCoroutine(WaitForShopState());
     }
 
-    private System.Collections.IEnumerator WaitForShopState()
+    private void OnDestroy()
+    {
+        UnregisterCallback();
+    }
+    #endregion
+
+    #region æ³¨å†Œ
+    public void RegisterLocalPlayer(PlayerState player)
+    {
+        localPlayer = player;
+    }
+
+    private IEnumerator WaitForShopState()
     {
         yield return new WaitUntil(() => ShopState.Instance != null);
 
@@ -45,11 +57,7 @@ public class ShopPanelUI : MonoBehaviour
         RefreshCenterShop();
     }
 
-    private void OnDestroy()
-    {
-        UnregisterCallback();
-    }
-    private void GetAllSlots()      // ×¥È¡ËùÓĞslot
+    private void GetAllSlots()
     {
         baseSlots.Clear();
         centerSlots.Clear();
@@ -66,8 +74,9 @@ public class ShopPanelUI : MonoBehaviour
             centerSlots.AddRange(centerShopSlotArray);
         }
     }
+    #endregion
 
-    #region ¼àÌıÊÂ¼ş´¥·¢º¯Êı
+    #region å•†åº—å›è°ƒ
     private void RegisterCallback()
     {
         if (shopState == null || hasRegisteredCallback) return;
@@ -79,6 +88,7 @@ public class ShopPanelUI : MonoBehaviour
 
         hasRegisteredCallback = true;
     }
+
     private void UnregisterCallback()
     {
         if (shopState == null || !hasRegisteredCallback) return;
@@ -90,6 +100,7 @@ public class ShopPanelUI : MonoBehaviour
 
         hasRegisteredCallback = false;
     }
+
     private void OnCenterCardChanged(int index)
     {
         RefreshCenterShop();
@@ -104,16 +115,18 @@ public class ShopPanelUI : MonoBehaviour
     {
         RefreshCenterShop();
     }
+
     private void OnCenterCardCleared()
     {
         RefreshCenterShop();
     }
+    #endregion
 
+    #region äº¤äº’
     public void OnSlotClicked(ShopSlotUI clickedSlot)
     {
         if (clickedSlot == null || clickedSlot.card == null) return;
 
-        // µÚÒ»´Îµã»÷£ºÑ¡ÖĞ
         if (currentSelectedSlot != clickedSlot)
         {
             if (currentSelectedSlot != null)
@@ -123,22 +136,17 @@ public class ShopPanelUI : MonoBehaviour
             currentSelectedSlot.SetSelected(true);
             return;
         }
-         
-        // µÚ¶ş´Îµã»÷£º¹ºÂò
-        if (localPlayer == null) return;
 
+        if (localPlayer == null) return;
         if (!CanAffordCardLocal(clickedSlot))
-        {
             return;
-        }
 
         localPlayer.RequestBuyCard(clickedSlot.slotIndex);
         currentSelectedSlot.SetSelected(false);
         currentSelectedSlot = null;
     }
-    #endregion
 
-    private bool CanAffordCardLocal(ShopSlotUI slot)        // ·¢ËÍÌáÊ¾Í¨Öª
+    private bool CanAffordCardLocal(ShopSlotUI slot)
     {
         if (slot == null || slot.card == null || localPlayer == null)
         {
@@ -147,7 +155,7 @@ public class ShopPanelUI : MonoBehaviour
 
         if (!localPlayer.isMyTurn)
         {
-            HintManager.Instance.ShowHint("²»ÊÇÎÒµÄ»ØºÏ");
+            HintManager.Instance.ShowHint("ä¸æ˜¯ä½ çš„å›åˆ");
             return false;
         }
 
@@ -159,7 +167,7 @@ public class ShopPanelUI : MonoBehaviour
             {
                 if (HintManager.Instance != null)
                 {
-                    HintManager.Instance.ShowHint("¹¥»÷²»×ã");
+                    HintManager.Instance.ShowHint("æ”»å‡»ä¸è¶³");
                 }
 
                 return false;
@@ -171,7 +179,7 @@ public class ShopPanelUI : MonoBehaviour
             {
                 if (HintManager.Instance != null)
                 {
-                    HintManager.Instance.ShowHint("·ÑÓÃ²»×ã");
+                    HintManager.Instance.ShowHint("è´¹ç”¨ä¸è¶³");
                 }
 
                 return false;
@@ -180,8 +188,10 @@ public class ShopPanelUI : MonoBehaviour
 
         return true;
     }
+    #endregion
 
-    private void RefreshCenterShop()        // Ë¢ĞÂÉÌµêÏÔÊ¾
+    #region æ¸²æŸ“
+    private void RefreshCenterShop()
     {
         if (shopState == null) return;
         if (centerSlots == null || centerSlots.Count == 0) return;
@@ -199,6 +209,7 @@ public class ShopPanelUI : MonoBehaviour
             centerSlots[i].slotIndex = i;
         }
     }
+
     private void RefreshBaseShop()
     {
         List<string> baseCardIds = shopState.baseCardIds;
@@ -213,7 +224,9 @@ public class ShopPanelUI : MonoBehaviour
             }
 
             baseSlots[i].SetCard(cardId);
-            baseSlots[i].slotIndex = i+5;
+            baseSlots[i].slotIndex = i + 5;
         }
     }
+    #endregion
 }
+

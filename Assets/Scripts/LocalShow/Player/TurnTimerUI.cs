@@ -17,6 +17,12 @@ public class TurnTimerUI : MonoBehaviour
             return;
         }
 
+        if (MatchManager.Instance.waitingForPublicActionDrain)
+        {
+            timerText.text = "--";
+            return;
+        }
+
         double remain = MatchManager.Instance.currentTurnEndTime - NetworkTime.time;
         remain = Mathf.Max(0f, (float)remain);
 

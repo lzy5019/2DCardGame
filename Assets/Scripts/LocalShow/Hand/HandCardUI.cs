@@ -1,11 +1,9 @@
-/// <summary>
-/// ¸ºÔğÊÖÅÆUI
-/// °üÀ¨ÅÅÁĞĞı×ª¡¢·Å´ó¡¢ÍÏ¶¯¡¢ÅĞ¶ÏÊÇ·ñ´ò³ö¿¨ÅÆ
-/// </summary>
-
-using UnityEngine;
+ï»¿using UnityEngine;
 using UnityEngine.EventSystems;
 
+/// <summary>
+/// æ§åˆ¶å•å¼ æ‰‹ç‰Œçš„æ‚¬åœã€æ‹–æ‹½ä»¥åŠä¸å‡ºç‰ŒåŒºåŸŸçš„äº¤äº’ã€‚
+/// </summary>
 public class HandCardUI : MonoBehaviour,
     IPointerEnterHandler,
     IPointerExitHandler,
@@ -14,45 +12,52 @@ public class HandCardUI : MonoBehaviour,
     IDragHandler,
     IEndDragHandler
 {
+    #region ç¼“å­˜å¼•ç”¨
     private RectTransform rect;
     private Canvas parentCanvas;
     private RectTransform parentRect;
+    #endregion
 
-    [Header("Ä¿±ê×´Ì¬")]
+    #region ç›®æ ‡çŠ¶æ€
+    [Header("ç›®æ ‡çŠ¶æ€")]
     public Vector2 targetPosition;
     public float targetRotation;
+    #endregion
 
-    [Header("ÒÆ¶¯²ÎÊı")]
+    #region åŠ¨ç”»è®¾ç½®
+    [Header("åŠ¨ç”»è®¾ç½®")]
     public float moveSpeed = 12f;
     public float rotateSpeed = 12f;
     public float scaleSpeed = 12f;
+    #endregion
 
-    [Header("ĞüÍ£Ğ§¹û")]
+    #region æ‚¬åœçŠ¶æ€
+    [Header("æ‚¬åœè®¾ç½®")]
     public float hoverHeight = 120f;
     public float hoverScale = 1.2f;
+    #endregion
 
-    [Header("ÍÏ×§Ğ§¹û")]
+    #region æ‹–æ‹½çŠ¶æ€
+    [Header("æ‹–æ‹½è®¾ç½®")]
     public float dragScale = 1.2f;
     public bool resetRotationWhenDragging = true;
     public float playThresholdY = 200f;
+    #endregion
 
-    public bool isHovering = false;     // Êó±êĞüÍ£
-    public bool isDragging = false;     // Êó±ê×ó¼ü°´×¡
+    #region è¿è¡Œæ—¶çŠ¶æ€
+    public bool isHovering = false;
+    public bool isDragging = false;
     public HandDisplayManager handDisplayManager;
-
     public string cardId;
     public int handIndex;
 
     private Vector2 dragOffset;
+    #endregion
 
+    #region ç”Ÿå‘½å‘¨æœŸ
     private void Awake()
     {
         rect = GetComponent<RectTransform>();
-    }
-    public void Initialized()
-    {
-        parentRect = transform.parent as RectTransform;
-        parentCanvas = GetComponentInParent<Canvas>();
     }
 
     private void Update()
@@ -107,11 +112,22 @@ public class HandCardUI : MonoBehaviour,
             Time.deltaTime * scaleSpeed
         );
     }
+    #endregion
 
+    #region åˆå§‹åŒ–
+    public void Initialized()
+    {
+        parentRect = transform.parent as RectTransform;
+        parentCanvas = GetComponentInParent<Canvas>();
+    }
+    #endregion
+
+    #region æŒ‡é’ˆäº‹ä»¶
     public void OnPointerEnter(PointerEventData eventData)
     {
         if (isDragging)
             return;
+
         isHovering = true;
         transform.SetAsLastSibling();
     }
@@ -120,6 +136,7 @@ public class HandCardUI : MonoBehaviour,
     {
         if (isDragging)
             return;
+
         isHovering = false;
         handDisplayManager.UpdateHandLayout();
     }
@@ -128,6 +145,7 @@ public class HandCardUI : MonoBehaviour,
     {
         if (eventData.button != PointerEventData.InputButton.Left)
             return;
+
         transform.SetAsLastSibling();
     }
 
@@ -180,8 +198,10 @@ public class HandCardUI : MonoBehaviour,
             handDisplayManager.playerState.RequestPlayCard(handIndex);
         }
     }
+    #endregion
 
-    private void UpdateDragOffset(PointerEventData eventData)   // ±£´æÍÏ×§Æ«ÒÆÁ¿
+    #region è¾…åŠ©æ–¹æ³•
+    private void UpdateDragOffset(PointerEventData eventData)
     {
         Vector2 localPoint;
         Camera eventCamera = parentCanvas != null && parentCanvas.renderMode != RenderMode.ScreenSpaceOverlay
@@ -206,4 +226,6 @@ public class HandCardUI : MonoBehaviour,
     {
         return rect.anchoredPosition.y >= playThresholdY;
     }
+    #endregion
 }
+

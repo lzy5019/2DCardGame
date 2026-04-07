@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using Mirror;
 using UnityEngine;
 
@@ -6,22 +6,25 @@ public class EquipmentZoneUI : MonoBehaviour
 {
     public static EquipmentZoneUI Instance;
 
-    [Header("��������")]
+    #region 界面引用
+    [Header("界面引用")]
     [SerializeField] private Transform weaponRoot;
     [SerializeField] private Transform equipmentContentRoot;
     [SerializeField] private GameObject cardPrefab;
 
-    [Header("��ѡ")]
+    [Header("可选对象")]
     [SerializeField] private GameObject emptyHintObject;
+    #endregion
 
+    #region 玩家状态
     private PlayerState localPlayer;
-
     private readonly List<GameObject> spawnedEquipmentCards = new List<GameObject>();
     private GameObject spawnedWeaponCard;
-
     private string cachedWeaponCardId = "";
     private bool cachedWeaponUsed = false;
+    #endregion
 
+    #region 生命周期
     private void Awake()
     {
         if (Instance != null && Instance != this)
@@ -33,6 +36,24 @@ public class EquipmentZoneUI : MonoBehaviour
         Instance = this;
     }
 
+    private void Update()
+    {
+        if (localPlayer == null)
+            return;
+
+        bool weaponChanged = cachedWeaponCardId != localPlayer.equippedWeaponCardId
+            || cachedWeaponUsed != localPlayer.equippedWeaponUsed;
+
+        if (weaponChanged)
+        {
+            cachedWeaponCardId = localPlayer.equippedWeaponCardId;
+            cachedWeaponUsed = localPlayer.equippedWeaponUsed;
+            RefreshWeapon();
+        }
+
+        RefreshCardStatesOnly();
+    }
+
     private void OnDestroy()
     {
         if (Instance == this)
@@ -42,7 +63,9 @@ public class EquipmentZoneUI : MonoBehaviour
 
         UnregisterCurrentPlayer();
     }
+    #endregion
 
+    #region 注册
     public void RegisterLocalPlayer(PlayerState player)
     {
         if (player == null)
@@ -74,7 +97,9 @@ public class EquipmentZoneUI : MonoBehaviour
 
         ClearAll();
     }
+    #endregion
 
+    #region 按钮请求
     public void RequestUseWeaponFromUI()
     {
         if (localPlayer == null)
@@ -90,25 +115,9 @@ public class EquipmentZoneUI : MonoBehaviour
 
         localPlayer.RequestUseEquipment(equipmentIndex);
     }
+    #endregion
 
-    private void Update()
-    {
-        if (localPlayer == null)
-            return;
-
-        bool weaponChanged = cachedWeaponCardId != localPlayer.equippedWeaponCardId
-            || cachedWeaponUsed != localPlayer.equippedWeaponUsed;
-
-        if (weaponChanged)
-        {
-            cachedWeaponCardId = localPlayer.equippedWeaponCardId;
-            cachedWeaponUsed = localPlayer.equippedWeaponUsed;
-            RefreshWeapon();
-        }
-
-        RefreshCardStatesOnly();
-    }
-
+    #region 同步回调
     private void OnEquippedCardsChanged(SyncList<string>.Operation op, int index, string oldItem, string newItem)
     {
         RefreshEquipmentList();
@@ -118,7 +127,9 @@ public class EquipmentZoneUI : MonoBehaviour
     {
         RefreshCardStatesOnly();
     }
+    #endregion
 
+    #region 渲染
     private void RefreshAll()
     {
         RefreshWeapon();
@@ -235,7 +246,9 @@ public class EquipmentZoneUI : MonoBehaviour
             cardUI.SetHighlight(CanUseEquipment(i));
         }
     }
+    #endregion
 
+    #region 可用性检查
     private bool CanUseWeapon()
     {
         if (localPlayer == null) return false;
@@ -253,7 +266,9 @@ public class EquipmentZoneUI : MonoBehaviour
         if (index < localPlayer.equippedCardUsedFlags.Count && localPlayer.equippedCardUsedFlags[index]) return false;
         return true;
     }
+    #endregion
 
+    #region 清理
     private void RefreshEmptyHint()
     {
         if (emptyHintObject == null)
@@ -293,4 +308,6 @@ public class EquipmentZoneUI : MonoBehaviour
             emptyHintObject.SetActive(false);
         }
     }
+    #endregion
 }
+

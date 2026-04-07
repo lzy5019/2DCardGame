@@ -1,28 +1,41 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 
 [CreateAssetMenu(fileName = "NewCardData", menuName = "Card Game/Card Data")]
 public class CardData : ScriptableObject
 {
-    [Header("»ù´¡ĞÅÏ¢")]
+    #region æ ‡è¯†ä¿¡æ¯
+    [Header("æ ‡è¯†ä¿¡æ¯")]
     public string cardId;
+    #endregion
 
-    [Header("ÊıÖµĞÅÏ¢")]
+    #region æ•°å€¼ä¿¡æ¯
+    [Header("æ•°å€¼ä¿¡æ¯")]
     public int cost;
     public int scoreValue;
+    #endregion
 
-    [Header("·ÖÀàĞÅÏ¢")]
+    #region åˆ†ç±»ä¿¡æ¯
+    [Header("åˆ†ç±»ä¿¡æ¯")]
     public CardType cardType;
     public CardCategory cardCategory;
+    #endregion
 
-    [Header("¿¨ÅÆÊıÁ¿")]
+    #region å¡ç»„è®¾ç½®
+    [Header("å¡ç»„è®¾ç½®")]
     public int cardNum;
+    #endregion
 
-    [Header("ÏÔÊ¾ĞÅÏ¢")]
+    #region è¡¨ç°ä¿¡æ¯
+    [Header("è¡¨ç°ä¿¡æ¯")]
     public Sprite cardSprite;
 
-    [Header("À©Õ¹Ô¤Áô")]
     [TextArea(2, 5)]
     public string description;
+    #endregion
 
+    #region æ•ˆæœä¿¡æ¯
+    [Header("æ•ˆæœä¿¡æ¯")]
     public string effectId;
+    #endregion
 }
+

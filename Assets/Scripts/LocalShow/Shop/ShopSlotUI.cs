@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
@@ -6,16 +6,17 @@ public class ShopSlotUI : MonoBehaviour, IPointerClickHandler
 {
     public CardData card;
     public int slotIndex;
-    
     public Image cardImage;
-
     public ShopPanelUI panel;
 
-    // ��ʾ����
+    #region 选中显示
     private Vector3 originalScale;
+
     [SerializeField] private float selectedScaleMultiplier = 1.05f;
     [SerializeField] private GameObject selectedFxObject;
+    #endregion
 
+    #region 生命周期
     private void Awake()
     {
         cardImage = GetComponent<Image>();
@@ -27,7 +28,9 @@ public class ShopSlotUI : MonoBehaviour, IPointerClickHandler
             selectedFxObject.SetActive(false);
         }
     }
+    #endregion
 
+    #region 数据绑定
     public void SetCard(string cardId)
     {
         if (string.IsNullOrEmpty(cardId))
@@ -50,17 +53,21 @@ public class ShopSlotUI : MonoBehaviour, IPointerClickHandler
         cardImage.sprite = card.cardSprite;
         cardImage.enabled = true;
     }
+    #endregion
 
+    #region 指针事件
     public void OnPointerClick(PointerEventData eventData)
     {
         if (eventData.button != PointerEventData.InputButton.Left) return;
         if (card == null) return;
         if (panel == null) return;
 
-        Debug.Log("���λ��: " + slotIndex);
+        Debug.Log("Shop slot clicked: " + slotIndex);
         panel.OnSlotClicked(this);
     }
+    #endregion
 
+    #region 视觉状态
     public void SetSelected(bool selected)
     {
         if (selectedFxObject != null)
@@ -77,4 +84,6 @@ public class ShopSlotUI : MonoBehaviour, IPointerClickHandler
             transform.localScale = originalScale;
         }
     }
+    #endregion
 }
+

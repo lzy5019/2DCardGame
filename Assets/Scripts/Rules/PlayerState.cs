@@ -1,4 +1,4 @@
-using Mirror;
+ï»¿using Mirror;
 using System.Collections.Generic;
 using UnityEngine;
 using Steamworks;
@@ -6,53 +6,58 @@ using System;
 
 public class PlayerState : NetworkBehaviour
 {
-    [Header("Íæ¼ÒÉí·İ")]
+    [Header("èº«ä»½ä¿¡æ¯")]
     [SyncVar] public int playerIndex = -1;
     [SyncVar] public string playerName = "";
     [SyncVar] public string steamId = "";
 
-    [Header("¹«¿ª×ÊÔ´")]
+    [Header("æ•°å€¼çŠ¶æ€")]
     [SyncVar] public int score = 0;
     [SyncVar] public int mana = 0;
     [SyncVar] public int attack = 0;
     [SyncVar] public int handCount = 0;
 
-    [Header("×´Ì¬")]
+    [Header("ç©å®¶çŠ¶æ€")]
     [SyncVar] public bool isReady = false;
     [SyncVar] public bool isMyTurn = false;
     [SyncVar] public bool isWizard = false;
 
-    [Header("ÅÆ¶ÑÊı¾İ")]
+    [Header("ç‰Œå †æ•°æ®")]
     public readonly SyncList<string> drawPile = new SyncList<string>();
     public readonly SyncList<string> discardPile = new SyncList<string>();
     public readonly SyncList<string> handCardIds = new SyncList<string>();
     public readonly SyncList<string> playedCardIds = new SyncList<string>();
     public readonly SyncList<string> ownedCardIds = new SyncList<string>();
-    public readonly SyncList<string> equippedCardIds = new SyncList<string>();      // ×°±¸
-    public readonly SyncList<bool> equippedCardUsedFlags = new SyncList<bool>();    // ×°±¸ÊÇ·ñ±»Ê¹ÓÃ
+    public readonly SyncList<string> equippedCardIds = new SyncList<string>();
+    public readonly SyncList<bool> equippedCardUsedFlags = new SyncList<bool>();
     [SyncVar] public string equippedWeaponCardId = "";
     [SyncVar] public bool equippedWeaponUsed = false;
     public readonly SyncList<string> playedEquipmentIds = new SyncList<string>();
 
-    [Header("±¾µØÍæ¼Ò×¨ÊôUI")]
+    [Header("æœ¬åœ°ç©å®¶ç•Œé¢")]
     [SerializeField] private GameObject playerCanvas;
 
-    // »Øµ÷º¯ÊıÓÃ
-    [Header("´ı´¦ÀíÑ¡Ôñ")]
+    // é€‰æ‹©çŠ¶æ€åˆ†ä¸ºæœåŠ¡å™¨ç«¯ä¿å­˜çš„è´Ÿè½½ï¼Œä»¥åŠæœ¬åœ°å®¢æˆ·ç«¯ç•Œé¢å±•ç¤ºçš„æ˜ å°„ã€‚
+    [Header("å¾…å¤„ç†é€‰æ‹©")]
     [SerializeField] private PendingSelectionType pendingSelectionType = PendingSelectionType.None;
-    private readonly List<int> pendingSelectionPayloads = new List<int>();  // ÓÃÓÚĞ£Ñé
-    private readonly List<int> localSelectionPayloads = new List<int>();    // Ó³Éä±í£ºÍæ¼ÒÑ¡Ôñ¡úÊµ¼ÊĞ§¹û
+    private readonly List<int> pendingSelectionPayloads = new List<int>();  // æœåŠ¡å™¨ç«¯ç­‰å¾…é€‰æ‹©æ—¶ä¿å­˜çš„æƒå¨è´Ÿè½½ã€‚
+    private readonly List<int> localSelectionPayloads = new List<int>();    // ç©å®¶ç¡®è®¤é€‰æ‹©æ—¶ï¼Œæœ¬åœ°é€‰é¡¹åˆ°è´Ÿè½½çš„æ˜ å°„ã€‚
     private int pendingMinSelectCount = 1;
     private int pendingMaxSelectCount = 1;
 
-    #region ¡¤¡ª¡ª¡ª¡ª³õÊ¼»¯¡ª¡ª¡ª¡ª¡¤
+    [Header("å¾…å¤„ç†å…¬å…±åŠ¨ä½œ")]
+    private bool hasPendingPublicAction = false;
+    private string pendingPublicCardId = "";
+    private PublicActionType pendingPublicActionType = PublicActionType.PlayCard;
+
+    #region ç©å®¶åˆå§‹åŒ–
     [Server]
     public void InitPlayer(int index)
     {
         playerIndex = index;
         if (string.IsNullOrEmpty(playerName))
         {
-            playerName = "Íæ¼Ò" + (index + 1);
+            playerName = "Player" + (index + 1);
         }
 
         if (string.IsNullOrEmpty(steamId))
@@ -77,6 +82,7 @@ public class PlayerState : NetworkBehaviour
         equippedCardUsedFlags.Clear();
         equippedWeaponCardId = "";
         equippedWeaponUsed = false;
+        ClearPendingPublicAction();
     }
     public override void OnStartServer()
     {
@@ -84,12 +90,12 @@ public class PlayerState : NetworkBehaviour
 
         if (MatchManager.Instance != null)
         {
-            Debug.Log("ÒÑ×¢²áµ½ MatchManager: " + playerName + " netId=" + netId);
+            Debug.Log("Registered to MatchManager: " + playerName + " netId=" + netId);
             MatchManager.Instance.RegisterPlayer(this);
         }
         else
         {
-            Debug.LogError("MatchManager.Instance ÊÇ null£¬×¢²áÊ§°Ü");
+            Debug.LogError("MatchManager.Instance is null, register failed");
         }
     }
     public override void OnStopServer()
@@ -101,11 +107,11 @@ public class PlayerState : NetworkBehaviour
 
         base.OnStopServer();
     }
-    public override void OnStartLocalPlayer()       // ±¾»ú×Ô¶¯µ÷ÓÃ£¬×¢²á
+    public override void OnStartLocalPlayer()
     {
         base.OnStartLocalPlayer();
 
-        if (SteamManager.Initialized)       // ¸ÄÃûÎªsteamµÄÃû×Ö
+        if (SteamManager.Initialized)
         {
             string localSteamName = SteamFriends.GetPersonaName();
             string localSteamId = SteamUser.GetSteamID().ToString();
@@ -113,27 +119,27 @@ public class PlayerState : NetworkBehaviour
             CmdSetSteamProfile(localSteamName, localSteamId);
         }
 
-        if (HandDisplayManager.Instance != null)        // ×¢²áÊÖÅÆÕ¹Ê¾
+        if (HandDisplayManager.Instance != null)
         {
             HandDisplayManager.Instance.RegisterLocalPlayer(this);
         }
 
-        if (PlayerEndTurn.Instance != null)             // ×¢²á»ØºÏ½áÊø°´Å¥
+        if (PlayerEndTurn.Instance != null)
         {
             PlayerEndTurn.Instance.RegisterLocalPlayer(this);
         }
 
-        if (ShopPanelUI.Instance != null)               // ×¢²áÉÌµêUI
+        if (ShopPanelUI.Instance != null)
         {
             ShopPanelUI.Instance.RegisterLocalPlayer(this);
         }
 
-        if (PileBrowserUI.Instance != null)             // ×¢²á²éÑ¯Ãæ°å
+        if (PileBrowserUI.Instance != null)
         {
             PileBrowserUI.Instance.RegisterLocalPlayer(this);
         }
 
-        if (PileCountUI.Instance != null)               // ×¢²áÊıÖµÏÔÊ¾
+        if (PileCountUI.Instance != null)
         {
             PileCountUI.Instance.RegisterLocalPlayer(this);
         }
@@ -153,15 +159,15 @@ public class PlayerState : NetworkBehaviour
     #endregion
 
     private void Start()
-    {   
-        // ¸ºÔğ±£Ö¤·Ç±¾µØÍæ¼ÒUI¹Ø±Õ
+    {
+        // åªæœ‰æœ¬åœ°ç©å®¶åº”ä¿ç•™è‡ªå·±çš„ä¸ªäººç•Œé¢ç”»å¸ƒå¯è§ã€‚
         if (!isLocalPlayer && playerCanvas != null)
         {
             playerCanvas.SetActive(false);
         }
     }
 
-    #region ¡¤¡ª¡ª¡ª¡ª»ØºÏ¿ØÖÆ¡ª¡ª¡ª¡ª¡¤
+    #region å›åˆæµç¨‹
     [Server]
     public void StartTurn()
     {
@@ -178,6 +184,7 @@ public class PlayerState : NetworkBehaviour
     public void EndTurn()
     {
         CancelPendingSelection();
+        ClearPendingPublicAction();
 
         isMyTurn = false;
         mana = 0;
@@ -210,7 +217,7 @@ public class PlayerState : NetworkBehaviour
         {
             if (HintManager.Instance != null)
             {
-                HintManager.Instance.ShowHint("ÇëÏÈÍê³Éµ±Ç°Ñ¡Ôñ");
+                HintManager.Instance.ShowHint("è¿˜æœ‰é€‰æ‹©æœªå®Œæˆ");
             }
             return;
         }
@@ -229,9 +236,66 @@ public class PlayerState : NetworkBehaviour
 
         MatchManager.Instance.EndCurrentTurn();
     }
+
+    public void RequestReportPublicActionQueueDrained(int waitId)
+    {
+        if (!isLocalPlayer)
+            return;
+
+        CmdReportPublicActionQueueDrained(waitId);
+    }
+
+    [Command]
+    private void CmdReportPublicActionQueueDrained(int waitId)
+    {
+        if (MatchManager.Instance == null)
+            return;
+
+        MatchManager.Instance.ReportPublicActionQueueDrained(this, waitId);
+    }
+
+    // å»¶è¿Ÿç»“ç®—çš„æ•ˆæœä¼šå…ˆç¼“å­˜å¯¹åº”çš„å…¬å…±åŠ¨ä½œï¼Œç›´åˆ°ç›¸å…³é€‰æ‹©å®Œæˆã€‚
+    private bool HandleEffectResultForPublicAction(CardEffectResult effectResult, string cardId, PublicActionType actionType)
+    {
+        if (effectResult == CardEffectResult.Failed)
+            return false;
+
+        if (effectResult == CardEffectResult.Applied)
+        {
+            BroadcastPublicAction(cardId, actionType);
+        }
+        else if (effectResult == CardEffectResult.Pending)
+        {
+            CachePendingPublicAction(cardId, actionType);
+        }
+
+        return true;
+    }
+
+    private void BroadcastPublicAction(string cardId, PublicActionType actionType)
+    {
+        if (MatchManager.Instance == null)
+            return;
+
+        MatchManager.Instance.BroadcastPublicAction(playerIndex, cardId, actionType);
+    }
+
+    private void CachePendingPublicAction(string cardId, PublicActionType actionType)
+    {
+        hasPendingPublicAction = true;
+        pendingPublicCardId = cardId;
+        pendingPublicActionType = actionType;
+    }
+
+    private void ClearPendingPublicAction()
+    {
+        hasPendingPublicAction = false;
+        pendingPublicCardId = "";
+        pendingPublicActionType = PublicActionType.PlayCard;
+    }
     #endregion
 
-    #region  ¡¤¡ª¡ª¡ª¡ª×ÊÔ´ĞŞ¸Ä¡ª¡ª¡ª¡ª¡¤
+    #region èµ„æºæ“ä½œ
     [Server]
     public void AddMana(int amount)
     {
@@ -266,10 +330,9 @@ public class PlayerState : NetworkBehaviour
     }
     #endregion
 
-    #region ¡¤¡ª¡ª¡ª¡ªÅÆ¶Ñ²Ù×÷¡ª¡ª¡ª¡ª¡¤
+    #region æ‰“ç‰Œè¯·æ±‚
 
-    // ´ÓhandcardUI½ÓÊÕÇëÇó³öÅÆ
-    #region  ¡¤¡ª¡ª³öÅÆ¡ª¡ª¡¤ 
+    // æ‰‹ç‰Œæ“ä½œå…ˆç”±æœ¬åœ°å‘èµ·è¯·æ±‚ï¼Œå†ç”±æœåŠ¡å™¨è¿›è¡Œæƒå¨ç»“ç®—ã€‚
     public void RequestPlayCard(int handIndex)      
     {
         if (!isLocalPlayer)
@@ -279,7 +342,7 @@ public class PlayerState : NetworkBehaviour
         {
             if (HintManager.Instance != null)
             {
-                HintManager.Instance.ShowHint("²»ÊÇÄãµÄ»ØºÏ");
+                HintManager.Instance.ShowHint("ä¸æ˜¯ä½ çš„å›åˆ");
             }
             return;
         }
@@ -288,7 +351,7 @@ public class PlayerState : NetworkBehaviour
         {
             if (HintManager.Instance != null)
             {
-                HintManager.Instance.ShowHint("ÇëÏÈÍê³Éµ±Ç°Ñ¡Ôñ");
+                HintManager.Instance.ShowHint("è¿˜æœ‰é€‰æ‹©æœªå®Œæˆ");
             }
             return;
         }
@@ -296,7 +359,7 @@ public class PlayerState : NetworkBehaviour
         CmdRequestPlayCard(handIndex);
     }
     [Command]
-    public void CmdRequestPlayCard(int handIndex)      // ÇëÇó³öÅÆ
+    public void CmdRequestPlayCard(int handIndex)
     {
         if (!isMyTurn) return;
         if (handIndex < 0 || handIndex >= handCardIds.Count) return;
@@ -311,25 +374,36 @@ public class PlayerState : NetworkBehaviour
         switch (card.cardType)
         {
             case CardType.Equipment:
-                EquipCardFromHand(cardId, handIndex);
-                Debug.Log("×°±¸£º" + cardId);
+                if (!EquipCardFromHand(cardId, handIndex))
+                    return;
+                Debug.Log("Equip: " + cardId);
                 break;
 
             case CardType.Weapon:
-                EquipWeaponFromHand(cardId, handIndex);
-                Debug.Log("×°±¸ÎäÆ÷£º" + cardId);
+                if (!EquipWeaponFromHand(cardId, handIndex))
+                    return;
+                Debug.Log("Equip weapon: " + cardId);
                 break;
 
             default:
-                PlayCardFromHand(cardId, handIndex);
-                Debug.Log("´ò³ö£º" + cardId);
-                CardEffectManager.Instance.ResolveCardEffect(playerIndex, cardId);
-                break;
+                {
+                    if (!PlayCardFromHand(cardId, handIndex))
+                        return;
+
+                    Debug.Log("Play: " + cardId);
+
+                    CardEffectResult effectResult = CardEffectManager.Instance.ResolveCardEffect(playerIndex, cardId);
+                    if (!HandleEffectResultForPublicAction(effectResult, cardId, PublicActionType.PlayCard))
+                        return;
+
+                    break;
+                }
+                
         }
     }
     #endregion
 
-    #region  ¡¤¡ª¡ªÂòÅÆ¡ª¡ª¡¤ 
+    #region å•†åº—è´­ä¹°è¯·æ±‚
     public void RequestBuyCard(int slotIndex)
     {
         if (!isLocalPlayer) return;
@@ -344,6 +418,7 @@ public class PlayerState : NetworkBehaviour
             CmdRequestBuyBaseCard(slotIndex - 5);
         }
     }
+    // è´­ä¹°ä¸­å¤®å•†åº—å¡ç‰Œæ—¶ï¼Œå¯èƒ½ä¼šåœ¨æ§½ä½è¡¥ç‰Œå‰å…ˆç»“ç®—å¡ç‰Œæ•ˆæœã€‚
     [Command]
     private void CmdRequestBuyCenterCard(int slotIndex)
     {
@@ -356,7 +431,9 @@ public class PlayerState : NetworkBehaviour
         {
             if (SpendAttack(card.cost))
             {
-                CardEffectManager.Instance.ResolveCardEffect(playerIndex ,cardId);
+                CardEffectResult effectResult = CardEffectManager.Instance.ResolveCardEffect(playerIndex, cardId);
+                if (!HandleEffectResultForPublicAction(effectResult, cardId, PublicActionType.DefeatCenterMonster))
+                    return;
             }
             else { return; }
         }
@@ -366,12 +443,13 @@ public class PlayerState : NetworkBehaviour
             {
                 AddCardToOwned(cardId);
                 AddCardToDiscard(cardId);
+                BroadcastPublicAction(cardId, PublicActionType.BuyCenterCard);
             }
             else { return; }
         }
 
         ShopState.Instance.RemoveCenterCard(slotIndex);
-        Debug.Log(playerName + " ¹ºÂòÁËÖĞ³¡ÅÆ£º" + cardId + "  ²ÛÎ»£º" + slotIndex);
+        Debug.Log(playerName + " bought center card: " + cardId + " slot: " + slotIndex);
     }
     [Command]
     private void CmdRequestBuyBaseCard(int baseIndex)
@@ -386,6 +464,7 @@ public class PlayerState : NetworkBehaviour
             if (SpendAttack(card.cost))
             {
                 currentPlayer.AddScore(1);
+                BroadcastPublicAction(cardId, PublicActionType.DefeatBaseMonster);
             }
             else { return; }
         }
@@ -395,11 +474,12 @@ public class PlayerState : NetworkBehaviour
             {
                 AddCardToOwned(cardId);
                 AddCardToDiscard(cardId);
+                BroadcastPublicAction(cardId, PublicActionType.BuyBaseCard);
             }
             else { return; }
         }
 
-        Debug.Log(playerName + " ¹ºÂòÁË»ù´¡ÅÆ£º" + cardId + "  »ù´¡²ÛÎ»£º" + baseIndex);
+        Debug.Log(playerName + " bought base card: " + cardId + " slot: " + baseIndex);
     }
     
     [Server]
@@ -425,6 +505,7 @@ public class PlayerState : NetworkBehaviour
     }
     #endregion
 
+    #region ç‰Œå †ç®¡ç†
     [Server]
     public void BuildStartDeck(List<string> startCards)
     {
@@ -449,8 +530,6 @@ public class PlayerState : NetworkBehaviour
         ShuffleDrawPile();
         UpdateHandCount();
     }
-    
-
 
     [Server]
     public void ShuffleDrawPile()
@@ -478,7 +557,8 @@ public class PlayerState : NetworkBehaviour
         ShuffleDrawPile();
     }
 
-    #region  ¡¤¡ª¡ª³éÅÆ¡ª¡ª¡¤
+    #endregion
+    #region æŠ½ç‰Œæ“ä½œ
     [Server]
     public string DrawOneCard()
     {
@@ -489,7 +569,7 @@ public class PlayerState : NetworkBehaviour
 
         if (drawPile.Count == 0)
         {
-            Debug.Log("Íæ¼ÒÅÆ¶ÑÎª¿Õ£¬ÎŞ·¨³éÅÆ");
+            HintManager.Instance.ShowHint("æŠ½ç‰Œå †ä¸ºç©º");
             return "";
         }
 
@@ -501,7 +581,7 @@ public class PlayerState : NetworkBehaviour
         return cardId;
     }
     [Server]
-    public void DrawCards(int amount)       // ³éÅÆ
+    public void DrawCards(int amount)
     {
         for (int i = 0; i < amount; i++)
         {
@@ -514,7 +594,7 @@ public class PlayerState : NetworkBehaviour
     #endregion
 
     [Server]
-    public bool PlayCardFromHand(string cardId, int index)         // ´ÓÊÖÅÆÖĞ´ò³ö
+    public bool PlayCardFromHand(string cardId, int index)
     {
         if (string.IsNullOrEmpty(cardId)) return false;
 
@@ -526,9 +606,9 @@ public class PlayerState : NetworkBehaviour
     }
 
     [Server]
-    private void EquipCardFromHand(string cardId, int handIndex)        // ×°±¸
+    private bool EquipCardFromHand(string cardId, int handIndex)
     {
-        if (string.IsNullOrEmpty(cardId)) return;
+        if (string.IsNullOrEmpty(cardId)) return false;
 
         handCardIds.RemoveAt(handIndex);
 
@@ -537,13 +617,14 @@ public class PlayerState : NetworkBehaviour
         playedEquipmentIds.Add(cardId);
         UpdateHandCount();
 
-        CardEffectManager.Instance.ResolveEquipEnterEffect(playerIndex, cardId);
+        CardEffectResult effectResult = CardEffectManager.Instance.ResolveEquipEnterEffect(playerIndex, cardId);
+        return HandleEffectResultForPublicAction(effectResult, cardId, PublicActionType.EquipCard);
     }
 
     [Server]
-    private void EquipWeaponFromHand(string cardId, int handIndex)      // ÎäÆ÷
+    private bool EquipWeaponFromHand(string cardId, int handIndex)
     {
-        if (string.IsNullOrEmpty(cardId)) return;
+        if (string.IsNullOrEmpty(cardId)) return false;
 
         handCardIds.RemoveAt(handIndex);
 
@@ -555,7 +636,7 @@ public class PlayerState : NetworkBehaviour
             equippedWeaponUsed = false;
 
             discardPile.Add(oldWeaponCardId);
-            CardEffectManager.Instance.ResolveEquipLeaveToDiscardEffect(playerIndex, cardId);
+            CardEffectManager.Instance.ResolveEquipLeaveToDiscardEffect(playerIndex, oldWeaponCardId);
         }
 
         equippedWeaponCardId = cardId;
@@ -564,11 +645,12 @@ public class PlayerState : NetworkBehaviour
 
         UpdateHandCount();
 
-        CardEffectManager.Instance.ResolveEquipEnterEffect(playerIndex, cardId);
+        CardEffectResult effectResult = CardEffectManager.Instance.ResolveEquipEnterEffect(playerIndex, cardId);
+        return HandleEffectResultForPublicAction(effectResult, cardId, PublicActionType.EquipWeapon);
     }
 
     [Server]
-    public bool RemoveCardFromHand(string cardId)       // ´ÓÊÖÅÆÖĞ·ÅÖğ
+    public bool RemoveCardFromHand(string cardId)
     {
         if (string.IsNullOrEmpty(cardId)) return false;
 
@@ -581,7 +663,7 @@ public class PlayerState : NetworkBehaviour
     }
 
     [Server]
-    public void DiscardHandCard(string cardId)      // ´ÓÊÖÅÆÖĞÆúÖÃ
+    public void DiscardHandCard(string cardId)
     {
         if (RemoveCardFromHand(cardId))
         {
@@ -594,9 +676,8 @@ public class PlayerState : NetworkBehaviour
     {
         handCount = handCardIds.Count;
     }
-    #endregion
 
-    #region ¡¤¡ª¡ª¡ª¡ª×°±¸ÎäÆ÷µ÷ÓÃ¡ª¡ª¡ª¡ª¡¤
+    #region è£…å¤‡æ¿€æ´»
     public void RequestUseWeapon()
     {
         if (!isLocalPlayer) return;
@@ -614,7 +695,9 @@ public class PlayerState : NetworkBehaviour
         if (string.IsNullOrEmpty(equippedWeaponCardId)) return;
         if (equippedWeaponUsed) return;
 
-        CardEffectManager.Instance.ResolveWeaponUseEffect(playerIndex, equippedWeaponCardId);
+        CardEffectResult effectResult = CardEffectManager.Instance.ResolveWeaponUseEffect(playerIndex, equippedWeaponCardId);
+        if (!HandleEffectResultForPublicAction(effectResult, equippedWeaponCardId, PublicActionType.UseWeapon))
+            return;
     }
 
     public void RequestUseEquipment(int equipmentIndex)
@@ -635,12 +718,15 @@ public class PlayerState : NetworkBehaviour
         if (equipmentIndex < equippedCardUsedFlags.Count && equippedCardUsedFlags[equipmentIndex]) return;
 
         string cardId = equippedCardIds[equipmentIndex];
-        CardEffectManager.Instance.ResolveEquipUseEffect(playerIndex, cardId, equipmentIndex);
+        CardEffectResult effectResult = CardEffectManager.Instance.ResolveEquipUseEffect(playerIndex, cardId, equipmentIndex);
+        if (!HandleEffectResultForPublicAction(effectResult, cardId, PublicActionType.UseEquipment))
+            return;
     }
     #endregion
 
-    #region ¡¤¡ª¡ª¡ª¡ª¿¨ÅÆ»Øµ÷¡ª¡ª¡ª¡ª¡¤
-    [Server]            // ´¦ÀíÑ¡ÔñÈë¿Ú£¬ÓÉCardEffectManagerµÄResolveCardEffectÍ³Ò»µ÷ÓÃ
+    #region é€‰æ‹©æµç¨‹
+    // æœåŠ¡å™¨ä¼šåœ¨æ‹¥æœ‰è¯¥ç©å®¶çš„å®¢æˆ·ç«¯æ‰“å¼€é€‰æ‹©ç•Œé¢ï¼Œå¹¶ç­‰å¾…åŸºäºè´Ÿè½½çš„å“åº”ã€‚
+    [Server]
     public void BeginSelection(
     PendingSelectionType selectionType,
     string title,
@@ -666,7 +752,7 @@ public class PlayerState : NetworkBehaviour
         );
     }
 
-    [TargetRpc]         // ¿Í»§¶Ë±¾µØ£¬ÓÉ·şÎñÆ÷µãÃû´¥·¢
+    [TargetRpc]
     private void TargetOpenSelection(
     NetworkConnectionToClient target,
     string title,
@@ -708,7 +794,7 @@ public class PlayerState : NetworkBehaviour
         );
     }
 
-    private void OnSelectionConfirmed(List<int> selectedIndexes)    // »Øµ÷º¯Êı£¬°ÑUIÑ¡ÏîÓ³ÉäÎªÕæÊµÑ¡Ïî
+    private void OnSelectionConfirmed(List<int> selectedIndexes)
     {
         if (selectedIndexes == null || selectedIndexes.Count == 0)
             return;
@@ -728,8 +814,9 @@ public class PlayerState : NetworkBehaviour
         CmdSubmitSelection(selectedPayloads.ToArray());
     }
 
+    // æœåŠ¡å™¨ä¼šæ ¹æ®å¼€å¯é€‰æ‹©æ—¶è®°å½•çš„æ˜ å°„æ¥è§£æç©å®¶é€‰ä¸­çš„è´Ÿè½½ã€‚
     [Command]
-    private void CmdSubmitSelection(int[] selectedPayloads)         // ¸ºÔğÖ´ĞĞ¾ñÔñºóµÄĞ§¹û
+    private void CmdSubmitSelection(int[] selectedPayloads)
     {
         if (pendingSelectionType == PendingSelectionType.None)
             return;
@@ -739,6 +826,8 @@ public class PlayerState : NetworkBehaviour
         if (!isMyTurn) return;
         if (selectedPayloads == null || selectedPayloads.Length == 0)
             return;
+
+        bool selectionResolvedSuccessfully = false;
 
         switch (pendingSelectionType)
         {
@@ -764,23 +853,32 @@ public class PlayerState : NetworkBehaviour
                         isWizard = true;
                     }
 
+                    selectionResolvedSuccessfully = true;
                     break;
                 }
         }
 
+        if (selectionResolvedSuccessfully && hasPendingPublicAction && MatchManager.Instance != null)
+        {
+            BroadcastPublicAction(pendingPublicCardId, pendingPublicActionType);
+        }
+
+        // æœåŠ¡å™¨å®Œæˆæœ¬æ¬¡é€‰æ‹©ç»“ç®—åï¼Œé‡ç½®é€‰æ‹©çŠ¶æ€ã€‚
         pendingSelectionType = PendingSelectionType.None;
         pendingSelectionPayloads.Clear();
         pendingMinSelectCount = 1;
         pendingMaxSelectCount = 1;
+        ClearPendingPublicAction();
     }
 
     [Server]
-    public void CancelPendingSelection()            // »ØºÏ½áÊø×Ô¶¯È¡ÏûÑ¡ÔñÊÂ¼ş
+    public void CancelPendingSelection()
     {
         pendingSelectionType = PendingSelectionType.None;
         pendingSelectionPayloads.Clear();
         pendingMinSelectCount = 1;
         pendingMaxSelectCount = 1;
+        ClearPendingPublicAction();
 
         if (connectionToClient != null)
         {
@@ -804,5 +902,7 @@ public class PlayerState : NetworkBehaviour
 public enum PendingSelectionType
 {
     None,
-    WizardDiscardOneCenterCard    // 00004ÊõÊ¿
+    WizardDiscardOneCenterCard    // ä¾›å¡ç‰Œ 00004 ä½¿ç”¨ï¼Œç”¨äºé€‰æ‹©ä¸€å¼ ä¸­å¤®å¡ç‰Œå¹¶å°†å…¶æ”¾é€ã€‚
 }
+
+

@@ -1,14 +1,18 @@
-using TMPro;
+﻿using TMPro;
 using UnityEngine;
 
 public class PlayerResourceUI : MonoBehaviour
 {
-    [Header("UI����")]
+    #region 界面引用
+    [Header("界面引用")]
     [SerializeField] private TMP_Text attackText;
     [SerializeField] private TMP_Text manaText;
     [SerializeField] private TMP_Text scoreText;
-    private PlayerState localPlayer;
 
+    private PlayerState localPlayer;
+    #endregion
+
+    #region 生命周期
     private void Update()
     {
         if (localPlayer == null)
@@ -21,9 +25,13 @@ public class PlayerResourceUI : MonoBehaviour
             SetData(localPlayer.attack, localPlayer.mana, localPlayer.score);
         }
     }
+    #endregion
+
+    #region 玩家查找
     private void FindLocalPlayer()
     {
         PlayerState[] players = FindObjectsOfType<PlayerState>();
+
         foreach (PlayerState player in players)
         {
             if (player.isLocalPlayer)
@@ -33,6 +41,9 @@ public class PlayerResourceUI : MonoBehaviour
             }
         }
     }
+    #endregion
+
+    #region 渲染
     public void SetData(int attack, int mana, int score)
     {
         if (attackText != null)
@@ -44,5 +55,6 @@ public class PlayerResourceUI : MonoBehaviour
         if (scoreText != null)
             scoreText.text = score.ToString();
     }
-
+    #endregion
 }
+

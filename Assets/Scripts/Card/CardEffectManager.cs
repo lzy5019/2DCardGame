@@ -1,11 +1,19 @@
+ï»¿using System.Collections.Generic;
 using Mirror;
-using System.Collections.Generic;
 using UnityEngine;
+
+public enum CardEffectResult
+{
+    Failed,
+    Applied,
+    Pending
+}
 
 public class CardEffectManager : NetworkBehaviour
 {
     public static CardEffectManager Instance;
 
+    #region ç”Ÿå‘½å‘¨æœŸ
     private void Awake()
     {
         if (Instance != null && Instance != this)
@@ -16,146 +24,165 @@ public class CardEffectManager : NetworkBehaviour
 
         Instance = this;
     }
+    #endregion
 
+    #region å¡ç‰Œæ•ˆæœ
     [Server]
-    public void ResolveCardEffect(int playerindex, string cardId)
+    public CardEffectResult ResolveCardEffect(int playerIndex, string cardId)
     {
-        if (playerindex < 0)
-            return;
-        PlayerState player = MatchManager.Instance.playerList[playerindex];
+        if (!TryGetPlayer(playerIndex, out PlayerState player))
+            return CardEffectResult.Failed;
+
         switch (cardId)
         {
-            case "00001":   // Ñ§Í½
-                player.AddMana(1);break;
+            case "00001":
+                player.AddMana(1);
+                return CardEffectResult.Applied;
 
-            case "00002":   // Ãñ±ø
-                player.AddAttack(1);break;
+            case "00002":
+                player.AddAttack(1);
+                return CardEffectResult.Applied;
 
-            case "00003":   // Õ½Ê¿
-                player.AddAttack(2); break;
+            case "00003":
+                player.AddAttack(2);
+                return CardEffectResult.Applied;
 
-            case "00004":   // ·¨Ê¦
-                player.AddMana(2); break;
+            case "00004":
+                player.AddMana(2);
+                return CardEffectResult.Applied;
 
-            case "00005":   // ÊõÊ¿
+            case "00005":
+            {
+                if (ShopState.Instance == null || CardDatabase.Instance == null)
+                    return CardEffectResult.Failed;
+
+                List<string> optionCardIds = new List<string>();
+                List<int> optionPayloads = new List<int>();
+
+                for (int i = 0; i < ShopState.Instance.centerCardIds.Count; i++)
                 {
-                    if (ShopState.Instance == null)
-                        break;
+                    string centerCardId = ShopState.Instance.centerCardIds[i];
+                    if (string.IsNullOrEmpty(centerCardId))
+                        continue;
 
-                    List<string> optionCardIds = new List<string>();
-                    List<int> optionPayloads = new List<int>();     // ÕæÊµÖµÁĞ±í
+                    CardData centerCardData = CardDatabase.Instance.GetCardById(centerCardId);
+                    if (centerCardData == null || centerCardData.cardSprite == null)
+                        continue;
 
-                    for (int i = 0; i < ShopState.Instance.centerCardIds.Count; i++)
-                    {
-                        string centerCardId = ShopState.Instance.centerCardIds[i];
-                        if (string.IsNullOrEmpty(centerCardId))
-                            continue;
-
-                        CardData centerCardData = CardDatabase.Instance.GetCardById(centerCardId);
-                        if (centerCardData == null || centerCardData.cardSprite == null)
-                            continue;
-
-                        optionCardIds.Add(centerCardId);
-                        optionPayloads.Add(i);
-                    }
-
-                    if (optionCardIds.Count == 0)
-                    {
-                        if (!player.isWizard)
-                        {
-                            player.DrawCards(1);
-                            player.isWizard = true;
-                        }
-                        break;
-                    }
-
-                    player.BeginSelection(
-                        PendingSelectionType.WizardDiscardOneCenterCard,
-                        "Ñ¡Ôñ 1 ÕÅÅÆ ·ÅÖğ",
-                        1,
-                        1,
-                        optionCardIds,
-                        optionPayloads
-                    );
-
-                    break;
+                    optionCardIds.Add(centerCardId);
+                    optionPayloads.Add(i);
                 }
 
-            case "01002":   // ³Â¼ÆÉñ
-                player.AddAttack(6);break;
+                if (optionCardIds.Count == 0)
+                {
+                    if (!player.isWizard)
+                    {
+                        player.DrawCards(1);
+                        player.isWizard = true;
+                    }
 
-            case "01003":   // ´ğ¾í»îÒ³Ö½
+                    return CardEffectResult.Applied;
+                }
+
+                player.BeginSelection(
+                    PendingSelectionType.WizardDiscardOneCenterCard,
+                    "æ”¾é€ä¸­åœº1å¼ å¡",
+                    1,
+                    1,
+                    optionCardIds,
+                    optionPayloads
+                );
+
+                return CardEffectResult.Pending;
+            }
+
+            case "01002":
+                player.AddAttack(6);
+                return CardEffectResult.Applied;
+
+            case "01003":
                 player.DrawCards(1);
-                break;
+                return CardEffectResult.Applied;
 
-
-
-
-
-
-            default: break;
+            default:
+                return CardEffectResult.Applied;
         }
     }
 
     [Server]
-    public void ResolveEquipEnterEffect(int playerIndex, string cardId)
+    public CardEffectResult ResolveEquipEnterEffect(int playerIndex, string cardId)
     {
-        if (playerIndex < 0) return;
-        PlayerState player = MatchManager.Instance.playerList[playerIndex];
+        if (!TryGetPlayer(playerIndex, out _))
+            return CardEffectResult.Failed;
 
         switch (cardId)
         {
-
-
             default:
-                break;
+                return CardEffectResult.Applied;
         }
     }
 
-    [Server]    // Ê¹ÓÃ×°±¸
-    public void ResolveEquipUseEffect(int playerIndex, string cardId, int equipmentIndex)
+    [Server]
+    public CardEffectResult ResolveEquipUseEffect(int playerIndex, string cardId, int equipmentIndex)
     {
-        if (playerIndex < 0) return;
-        PlayerState player = MatchManager.Instance.playerList[playerIndex];
+        if (!TryGetPlayer(playerIndex, out PlayerState player))
+            return CardEffectResult.Failed;
 
         switch (cardId)
         {
             case "01015":
                 player.AddAttack(1);
                 player.equippedCardUsedFlags[equipmentIndex] = true;
-                break;
+                return CardEffectResult.Applied;
 
             default:
-                break;
+                return CardEffectResult.Failed;
         }
     }
 
-    [Server]    // Ê¹ÓÃÎäÆ÷
-    public void ResolveWeaponUseEffect(int playerIndex, string cardId)
+    [Server]
+    public CardEffectResult ResolveWeaponUseEffect(int playerIndex, string cardId)
     {
-        if (playerIndex < 0) return;
-        PlayerState player = MatchManager.Instance.playerList[playerIndex];
-        if (player == null) return;
+        if (!TryGetPlayer(playerIndex, out _))
+            return CardEffectResult.Failed;
 
         switch (cardId)
         {
             default:
-                break;
+                return CardEffectResult.Failed;
         }
     }
 
-    [Server]    // ×°±¸Àë¿ª×°±¸Çø
-    public void ResolveEquipLeaveToDiscardEffect(int playerIndex, string cardId)
+    [Server]
+    public CardEffectResult ResolveEquipLeaveToDiscardEffect(int playerIndex, string cardId)
     {
-        if (playerIndex < 0) return;
-        PlayerState player = MatchManager.Instance.playerList[playerIndex];
+        if (!TryGetPlayer(playerIndex, out _))
+            return CardEffectResult.Failed;
 
         switch (cardId)
         {
             default:
-                break;
+                return CardEffectResult.Applied;
         }
     }
+    #endregion
+
+    #region è¾…åŠ©æ–¹æ³•
+    [Server]
+    private bool TryGetPlayer(int playerIndex, out PlayerState player)
+    {
+        player = null;
+
+        if (playerIndex < 0)
+            return false;
+        if (MatchManager.Instance == null)
+            return false;
+        if (playerIndex >= MatchManager.Instance.playerList.Count)
+            return false;
+
+        player = MatchManager.Instance.playerList[playerIndex];
+        return player != null;
+    }
+    #endregion
 }
-
 

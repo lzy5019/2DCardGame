@@ -1,15 +1,16 @@
+ï»¿using System.Collections.Generic;
 using Mirror;
-using System.Collections.Generic;
 using UnityEngine;
 
 public class ShopState : NetworkBehaviour
 {
     public static ShopState Instance;
 
+    #region å¡ç»„æ•°æ®
     [SerializeField] private List<string> shopDeck = new List<string>();
     [SerializeField] private List<string> discardPile = new List<string>();
 
-    // ÉÌµêÕ¹Ê¾µÄ5ÕÅ¿¨
+    // è¿™äº”ä¸ªæ¡ç›®è¡¨ç¤ºä¸­å¤®å•†åº—å½“å‰å¯è§çš„äº”ä¸ªæ§½ä½ã€‚
     public readonly SyncList<string> centerCardIds = new SyncList<string>();
 
     public List<string> baseCardIds = new List<string>()
@@ -20,7 +21,9 @@ public class ShopState : NetworkBehaviour
         "00000",
         ""
     };
+    #endregion
 
+    #region ç”Ÿå‘½å‘¨æœŸ
     private void Awake()
     {
         if (Instance != null && Instance != this)
@@ -41,9 +44,11 @@ public class ShopState : NetworkBehaviour
         InitCenterSlots();
         FillCenterCards();
     }
+    #endregion
 
+    #region æ„å»ºå¡ç»„
     [Server]
-    private void BuildDeck()    // ¹¹½¨ÖĞ³¡ÅÆ¶Ñ
+    private void BuildDeck()
     {
         shopDeck.Clear();
 
@@ -58,8 +63,9 @@ public class ShopState : NetworkBehaviour
             }
         }
     }
+
     [Server]
-    private void ShuffleDeck()  // ÖĞ³¡Ï´ÅÆ
+    private void ShuffleDeck()
     {
         for (int i = 0; i < discardPile.Count; i++)
         {
@@ -77,8 +83,9 @@ public class ShopState : NetworkBehaviour
             shopDeck[randomIndex] = temp;
         }
     }
+
     [Server]
-    private void InitCenterSlots()  // ³õÊ¼»¯ÖĞ³¡5¸ö²ÛÎ»
+    private void InitCenterSlots()
     {
         centerCardIds.Clear();
 
@@ -87,8 +94,11 @@ public class ShopState : NetworkBehaviour
             centerCardIds.Add("");
         }
     }
+    #endregion
+
+    #region æŠ½å–ä¸åˆ·æ–°
     [Server]
-    private void FillCenterCards()  // Ìî³äÖĞ³¡¿¨ÅÆ
+    private void FillCenterCards()
     {
         for (int i = 0; i < centerCardIds.Count; i++)
         {
@@ -99,15 +109,16 @@ public class ShopState : NetworkBehaviour
 
             if (string.IsNullOrEmpty(newCardId))
             {
-                Debug.Log("Ã»ÓĞ¿É²¹³äµÄÖĞ³¡ÅÆÁË");
+                Debug.Log("No more cards are available for the center shop.");
                 return;
             }
 
             centerCardIds[i] = newCardId;
         }
     }
+
     [Server]
-    private string DrawCard()   // ³é¿¨
+    private string DrawCard()
     {
         if (shopDeck.Count == 0)
         {
@@ -117,7 +128,7 @@ public class ShopState : NetworkBehaviour
             }
             else
             {
-                Debug.Log("ÖĞ³¡ÅÆ¶ÑÎª¿Õ£¬ÇÒÆúÅÆ¶ÑÒ²Îª¿Õ");
+                Debug.Log("Shop deck and discard pile are both empty.");
                 return "";
             }
         }
@@ -126,12 +137,16 @@ public class ShopState : NetworkBehaviour
         shopDeck.RemoveAt(0);
         return cardId;
     }
+    #endregion
+
+    #region æ§½ä½æ›´æ–°
     [Server]
-    public void RemoveCenterCard(int slotIndex) // ¹ºÂòÅÆ
+    public void RemoveCenterCard(int slotIndex)
     {
         centerCardIds[slotIndex] = "";
         FillCenterCards();
     }
+
     [Server]
     public void DiscardCenterCard(int slotIndex)
     {
@@ -146,4 +161,6 @@ public class ShopState : NetworkBehaviour
         centerCardIds[slotIndex] = "";
         FillCenterCards();
     }
+    #endregion
 }
+

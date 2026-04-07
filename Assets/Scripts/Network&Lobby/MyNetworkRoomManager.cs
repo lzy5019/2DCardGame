@@ -1,33 +1,31 @@
-using System.Collections;
-using System.Collections.Generic;
+﻿using Mirror;
 using UnityEngine;
-using Mirror;
 using UnityEngine.SceneManagement;
 
 public class MyNetworkRoomManager : NetworkRoomManager
 {
     public static MyNetworkRoomManager Instance;
+
     private const string OfflineSceneName = "MainMenu";
 
+    #region 房间状态
     public GameObject startGameButton;
-
     public int gamePlayerCount = 0;
+    #endregion
 
-
+    #region 生命周期
     public override void Awake()
     {
         base.Awake();
+
         if (Instance == null)
         {
             Instance = this;
             DontDestroyOnLoad(gameObject);
         }
-        else
+        else if (gameObject != null)
         {
-            if (gameObject != null)
-            {
-                Destroy(gameObject);
-            }
+            Destroy(gameObject);
         }
     }
 
@@ -35,12 +33,23 @@ public class MyNetworkRoomManager : NetworkRoomManager
     {
         base.Start();
 
-        if(Utils.IsSceneActive(RoomScene) && startGameButton != null)
+        if (Utils.IsSceneActive(RoomScene) && startGameButton != null)
         {
             startGameButton.SetActive(true);
         }
     }
 
+    public override void OnGUI()
+    {
+        if (!showRoomGUI)
+            return;
+
+        if (!Utils.IsSceneActive(RoomScene))
+            return;
+    }
+    #endregion
+
+    #region 房间准备状态
     public override void OnRoomServerPlayersReady()
     {
         if (Utils.IsSceneActive(RoomScene) && startGameButton != null)
@@ -56,17 +65,9 @@ public class MyNetworkRoomManager : NetworkRoomManager
             startGameButton.SetActive(false);
         }
     }
+    #endregion
 
-    public override void OnGUI()
-    {
-        if (!showRoomGUI)
-            return;
-
-        if (!Utils.IsSceneActive(RoomScene)) 
-            return;
-    }
-
-    #region UI引用
+    #region 场景切换
     public void StartGame()
     {
         gamePlayerCount = roomSlots.Count;
@@ -75,7 +76,7 @@ public class MyNetworkRoomManager : NetworkRoomManager
 
     public void ReturnToLobby()
     {
-        if(NetworkServer.active && Utils.IsSceneActive(GameplayScene))
+        if (NetworkServer.active && Utils.IsSceneActive(GameplayScene))
         {
             ServerChangeScene(RoomScene);
         }
@@ -108,8 +109,5 @@ public class MyNetworkRoomManager : NetworkRoomManager
         SceneManager.LoadScene(OfflineSceneName);
     }
     #endregion
-
-
-
-
 }
+

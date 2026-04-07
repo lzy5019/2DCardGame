@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using Mirror;
 using TMPro;
 using UnityEngine;
@@ -7,7 +7,7 @@ public class PileCountUI : MonoBehaviour
 {
     public static PileCountUI Instance;
 
-    [Header("Pile Count Text")]
+    [Header("牌堆数量文本")]
     public TMP_Text discardPileText;
     public TMP_Text drawPileText;
     public TMP_Text playedPileText;
@@ -127,3 +127,5 @@ public class PileCountUI : MonoBehaviour
         }
     }
 }
+
+

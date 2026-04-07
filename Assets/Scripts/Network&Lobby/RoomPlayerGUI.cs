@@ -1,5 +1,4 @@
-using Mirror;
-using Steamworks;
+﻿using Mirror;
 using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -7,19 +6,20 @@ using UnityEngine.UI;
 
 public class RoomPlayerGUI : MonoBehaviour
 {
-    [SerializeField] GameObject playerPanelPrefab;
+    [SerializeField] private GameObject playerPanelPrefab;
 
-    Button readyBtn;
-    Button cancelBtn;
-    Button removeBtn;
+    #region 界面引用
+    private Button readyBtn;
+    private Button cancelBtn;
+    private Button removeBtn;
+    private TextMeshProUGUI playerName;
+    private TextMeshProUGUI readyState;
+    private GameObject playerlist;
+    private GameObject playerPanel;
+    private MyNetworkRoomPlayer player;
+    #endregion
 
-    TextMeshProUGUI playerName;
-    TextMeshProUGUI readyState;
-
-    GameObject playerlist;
-    GameObject playerPanel;
-    MyNetworkRoomPlayer player;
-
+    #region 生命周期
     private void Start()
     {
         InitializeUI();
@@ -35,31 +35,47 @@ public class RoomPlayerGUI : MonoBehaviour
         SceneManager.sceneLoaded -= OnSceneLoaded;
     }
 
-    private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
-    {
-        if(scene.name == "LobbyScene")
-        {
-            InitializeUI();
-        }
-    }
-
     private void Update()
     {
         if (playerName != null)
         {
             playerName.text = player.roomPlayerName;
         }
+
         if (readyState != null)
         {
-            readyState.text = player.readyToBegin ? "׼��" : "δ׼��";
+            readyState.text = player.readyToBegin ? "Ready" : "Not Ready";
         }
-        if(NetworkClient.active && player.isLocalPlayer)
+
+        if (NetworkClient.active && player.isLocalPlayer)
         {
-            if(readyBtn != null && cancelBtn != null)
+            if (readyBtn != null && cancelBtn != null)
             {
                 readyBtn.gameObject.SetActive(!player.readyToBegin);
                 cancelBtn.gameObject.SetActive(player.readyToBegin);
             }
+        }
+    }
+
+    private void OnDestroy()
+    {
+        if (readyBtn != null)
+            readyBtn.onClick.RemoveAllListeners();
+
+        if (cancelBtn != null)
+            cancelBtn.onClick.RemoveAllListeners();
+
+        if (removeBtn != null)
+            removeBtn.onClick.RemoveAllListeners();
+    }
+    #endregion
+
+    #region 场景初始化
+    private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        if (scene.name == "LobbyScene")
+        {
+            InitializeUI();
         }
     }
 
@@ -69,7 +85,8 @@ public class RoomPlayerGUI : MonoBehaviour
 
         player = GetComponent<MyNetworkRoomPlayer>();
         playerlist = GameObject.FindWithTag("PlayerList");
-        playerPanel = Instantiate(playerPanelPrefab, playerlist.transform) as GameObject;
+        playerPanel = Instantiate(playerPanelPrefab, playerlist.transform);
+
         readyBtn = playerPanel.transform.Find("Ready Button").GetComponent<Button>();
         cancelBtn = playerPanel.transform.Find("Cancel Button").GetComponent<Button>();
         removeBtn = playerPanel.transform.Find("Remove Button").GetComponent<Button>();
@@ -80,19 +97,21 @@ public class RoomPlayerGUI : MonoBehaviour
         cancelBtn.gameObject.SetActive(false);
         removeBtn.gameObject.SetActive(false);
 
-        if(NetworkClient.active && player.isLocalPlayer)
+        if (NetworkClient.active && player.isLocalPlayer)
         {
             readyBtn.onClick.AddListener(OnReadyButtonClicked);
             cancelBtn.onClick.AddListener(OnCancelButtonClicked);
         }
 
-        if(player.isServer && !player.isLocalPlayer)
+        if (player.isServer && !player.isLocalPlayer)
         {
             removeBtn.gameObject.SetActive(true);
             removeBtn.onClick.AddListener(OnRemoveButtonClicked);
         }
     }
+    #endregion
 
+    #region 按钮事件
     private void OnReadyButtonClicked()
     {
         readyBtn.gameObject.SetActive(false);
@@ -110,21 +129,12 @@ public class RoomPlayerGUI : MonoBehaviour
     private void OnRemoveButtonClicked()
     {
         GetComponent<NetworkIdentity>().connectionToClient.Disconnect();
-        if(playerPanel != null)
+
+        if (playerPanel != null)
         {
             Destroy(playerPanel.gameObject);
         }
     }
-
-    private void OnDestroy()
-    {
-        if (readyBtn != null)
-            readyBtn.onClick.RemoveAllListeners();
-
-        if (cancelBtn != null)
-            cancelBtn.onClick.RemoveAllListeners();
-
-        if (removeBtn != null)
-            removeBtn.onClick.RemoveAllListeners();
-    }
+    #endregion
 }
+

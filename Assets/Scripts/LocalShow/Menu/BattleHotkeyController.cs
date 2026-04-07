@@ -30,6 +30,15 @@ public class BattleHotkeyController : MonoBehaviour
         if (settingManager.IsOpen)
             return;
 
+        if (SelectionUI.Instance != null && SelectionUI.Instance.isSelecting)
+        {
+            if (Input.GetKeyDown(KeyCode.Q))
+            {
+                SelectionUI.Instance.TriggerHideByHotkey();
+                return;
+            }
+        }
+
         if (pileBrowserUI.IsOpen)
         {
             if (Input.GetKeyDown(KeyCode.A))

@@ -1,4 +1,4 @@
-using Steamworks;
+﻿using Steamworks;
 using UnityEngine;
 
 public class SteamLobby : MonoBehaviour
@@ -129,3 +129,4 @@ public class SteamLobby : MonoBehaviour
         hasActiveLobby = false;
     }
 }
+

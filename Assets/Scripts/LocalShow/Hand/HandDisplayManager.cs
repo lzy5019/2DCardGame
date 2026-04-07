@@ -1,34 +1,39 @@
-/// <summary>
-/// ÊÖÅÆ¹ÜÀíÆ÷
-/// ¸ºÔğ¶ÁÈ¡ÊÖÅÆÊı¾İ£¬Éú³ÉÊÖÅÆUI
-/// </summary>
-
-using Mirror;
-using System.Collections;
+ï»¿using System.Collections;
 using System.Collections.Generic;
+using Mirror;
 using UnityEngine;
 using UnityEngine.UI;
 
+/// <summary>
+/// æ ¹æ®åŒæ­¥åçš„æ‰‹ç‰Œåˆ—è¡¨æ„å»ºæ‰‹ç‰Œç•Œé¢ï¼Œå¹¶æŒç»­æ›´æ–°å¸ƒå±€ã€‚
+/// </summary>
 public class HandDisplayManager : MonoBehaviour
 {
     public static HandDisplayManager Instance;
 
+    #region å¼•ç”¨
     public PlayerState playerState;
     public RectTransform handArea;
+    #endregion
 
+    #region å¸ƒå±€è®¾ç½®
     public Vector2 cardSize = new Vector2(252, 352);
     public float cardSpacing = 150f;
     public float maxRotation = 15f;
     public float curveHeight = 5f;
+    #endregion
 
+    #region è¿è¡Œæ—¶çŠ¶æ€
     private readonly List<GameObject> cardObjects = new List<GameObject>();
-    private bool isWaitingFullRefresh = false;  // µÈ´ıË¢ĞÂ·ÀÖ¹³åÍ»
+    private bool isWaitingFullRefresh = false;
+    #endregion
 
+    #region ç”Ÿå‘½å‘¨æœŸ
     private void Awake()
     {
         if (Instance != null && Instance != this)
         {
-            Debug.LogWarning("³¡¾°ÖĞ´æÔÚ¶à¸ö HandDisplayManager£¬ÒÑÏú»ÙÖØ¸´¶ÔÏó");
+            Debug.LogWarning("Multiple HandDisplayManager instances were found. The duplicate was destroyed.");
             Destroy(gameObject);
             return;
         }
@@ -36,7 +41,18 @@ public class HandDisplayManager : MonoBehaviour
         Instance = this;
     }
 
-    #region ±¾µØµÇ¼Ç & ¼àÌıÊÖÅÆÊı¾İ±ä»¯
+    private void OnDestroy()
+    {
+        if (Instance == this)
+        {
+            Instance = null;
+        }
+
+        UnregisterCurrentPlayer();
+    }
+    #endregion
+
+    #region ç©å®¶æ³¨å†Œ
     public void RegisterLocalPlayer(PlayerState localPlayerState)
     {
         if (localPlayerState == null)
@@ -52,6 +68,7 @@ public class HandDisplayManager : MonoBehaviour
 
         RefreshHand();
     }
+
     public void UnregisterCurrentPlayer()
     {
         if (playerState != null)
@@ -61,15 +78,6 @@ public class HandDisplayManager : MonoBehaviour
         }
 
         ClearHand();
-    }
-    private void OnDestroy()
-    {
-        if (Instance == this)
-        {
-            Instance = null;
-        }
-
-        UnregisterCurrentPlayer();
     }
 
     private void OnHandCardsChanged(SyncList<string>.Operation op, int index, string item)
@@ -97,11 +105,9 @@ public class HandDisplayManager : MonoBehaviour
                 break;
 
             case SyncList<string>.Operation.OP_CLEAR:
-                if (!isWaitingFullRefresh)
-                {
-                    StartCoroutine(RefreshHandNextFrame());
-                }
+                StartCoroutine(RefreshHandNextFrame());
                 return;
+
             case SyncList<string>.Operation.OP_SET:
             case SyncList<string>.Operation.OP_INSERT:
             default:
@@ -109,6 +115,7 @@ public class HandDisplayManager : MonoBehaviour
                 break;
         }
     }
+
     private IEnumerator RefreshHandNextFrame()
     {
         isWaitingFullRefresh = true;
@@ -116,10 +123,10 @@ public class HandDisplayManager : MonoBehaviour
         RefreshHand();
         isWaitingFullRefresh = false;
     }
-
     #endregion
 
-    public void RefreshHand()       // Ë¢ĞÂÊÖÅÆÏÔÊ¾
+    #region æ‰‹ç‰Œæ¸²æŸ“
+    public void RefreshHand()
     {
         ClearHand();
 
@@ -155,7 +162,7 @@ public class HandDisplayManager : MonoBehaviour
             cardUI.handDisplayManager = this;
             cardUI.handIndex = i;
             cardUI.cardId = cardId;
-            cardUI.Initialized();       // ÄÃÈ¡¸¸ÎïÌå×ø±ê
+            cardUI.Initialized();
 
             cardObjects.Add(cardObj);
         }
@@ -163,20 +170,18 @@ public class HandDisplayManager : MonoBehaviour
         UpdateHandLayout();
     }
 
-    public void UpdateHandLayout()      // µ÷Õû½Ç¶ÈºÍÅÆ¼ä¾à
+    public void UpdateHandLayout()
     {
         int count = cardObjects.Count;
         if (count == 0)
             return;
 
         float spacing = cardSpacing - 5 * count;
-
         HandCardUI hoveringCard = null;
 
         for (int i = 0; i < count; i++)
         {
             float offset = i - (count - 1) / 2f;
-
             float x = offset * spacing;
             float y = -Mathf.Abs(offset) * curveHeight;
 
@@ -205,8 +210,10 @@ public class HandDisplayManager : MonoBehaviour
             hoveringCard.transform.SetAsLastSibling();
         }
     }
+    #endregion
 
-    public void RearrangeAfterPlay(int handIndex)       // ´ò³öÅÆºóÖØĞÂÍ³³ï
+    #region å¢é‡æ›´æ–°
+    public void RearrangeAfterPlay(int handIndex)
     {
         GameObject playedCardObj = cardObjects[handIndex];
 
@@ -230,7 +237,7 @@ public class HandDisplayManager : MonoBehaviour
         UpdateHandLayout();
     }
 
-    public void RearrangeAfterDraw()        // ³éÅÆºóÖØĞÂÍ³³ï
+    public void RearrangeAfterDraw()
     {
         List<string> handCards = new List<string>(playerState.handCardIds);
 
@@ -273,7 +280,7 @@ public class HandDisplayManager : MonoBehaviour
         UpdateHandLayout();
     }
 
-    public void ClearHand()        // ÇåÀíËùÓĞÊÖÅÆÊµÀı
+    public void ClearHand()
     {
         for (int i = 0; i < cardObjects.Count; i++)
         {
@@ -285,4 +292,5 @@ public class HandDisplayManager : MonoBehaviour
 
         cardObjects.Clear();
     }
+    #endregion
 }

@@ -8,20 +8,23 @@ public class SelectionUI : MonoBehaviour
 {
     public static SelectionUI Instance;
 
-    [Header("基础引用")]
+    #region 界面引用
+    [Header("核心引用")]
     public GameObject background;
     public Button hideButton;
     public TMP_Text titleText;
     public Button confirmButton;
     public GameObject selectionPanel;
 
-    [Header("Scroll View")]
+    [Header("滚动视图")]
     public ScrollRect scrollView;
     public Transform contentRoot;
 
-    [Header("选项 Prefab")]
+    [Header("选项预制体")]
     public GameObject selectionCardPrefab;
+    #endregion
 
+    #region 状态
     [Header("状态")]
     public bool isSelecting;
 
@@ -31,9 +34,10 @@ public class SelectionUI : MonoBehaviour
     private int minSelectCount = 1;
     private int maxSelectCount = 1;
     private bool isBackgroundVisible = true;
-
     private Action<List<int>> onConfirmSelection;
+    #endregion
 
+    #region 属性
     public int SelectedCount
     {
         get { return selectedIndexes.Count; }
@@ -48,7 +52,9 @@ public class SelectionUI : MonoBehaviour
     {
         get { return maxSelectCount; }
     }
+    #endregion
 
+    #region 生命周期
     private void Awake()
     {
         if (Instance != null && Instance != this)
@@ -92,7 +98,9 @@ public class SelectionUI : MonoBehaviour
             confirmButton.onClick.RemoveListener(ConfirmSelection);
         }
     }
+    #endregion
 
+    #region 打开与关闭
     public void ShowSelection(string title, List<Sprite> optionSprites, int selectCount, Action<List<int>> onConfirm)
     {
         ShowSelection(title, optionSprites, selectCount, selectCount, onConfirm);
@@ -102,9 +110,10 @@ public class SelectionUI : MonoBehaviour
     {
         if (optionSprites == null || optionSprites.Count == 0)
         {
-            Debug.LogWarning("SelectionUI: optionSprites 为空，无法打开选择面板。");
+            Debug.LogWarning("SelectionUI: optionSprites is empty. The selection panel cannot be opened.");
             return;
         }
+
         if (titleText != null)
         {
             titleText.text = title;
@@ -157,7 +166,9 @@ public class SelectionUI : MonoBehaviour
         SetBackgroundVisible(true);
         RefreshConfirmButton();
     }
+    #endregion
 
+    #region 交互
     public void OnOptionClicked(int optionIndex)
     {
         if (!isSelecting)
@@ -200,6 +211,23 @@ public class SelectionUI : MonoBehaviour
         SetBackgroundVisible(!isBackgroundVisible);
     }
 
+    public void TriggerHideByHotkey()
+    {
+        if (!isSelecting)
+            return;
+
+        if (hideButton != null)
+        {
+            hideButton.onClick.Invoke();
+        }
+        else
+        {
+            ToggleBackground();
+        }
+    }
+    #endregion
+
+    #region 渲染
     private void SetBackgroundVisible(bool visible)
     {
         isBackgroundVisible = visible;
@@ -225,7 +253,7 @@ public class SelectionUI : MonoBehaviour
     {
         if (selectionCardPrefab == null || contentRoot == null)
         {
-            Debug.LogWarning("SelectionUI: selectionCardPrefab 或 contentRoot 没有赋值。");
+            Debug.LogWarning("SelectionUI: selectionCardPrefab or contentRoot is not assigned.");
             return;
         }
 
@@ -236,7 +264,7 @@ public class SelectionUI : MonoBehaviour
             SelectionCardUI cardUI = optionObj.GetComponent<SelectionCardUI>();
             if (cardUI == null)
             {
-                Debug.LogWarning("SelectionUI: selectionCardPrefab 上缺少 SelectionCardUI 组件。");
+                Debug.LogWarning("SelectionUI: selectionCardPrefab is missing SelectionCardUI.");
                 Destroy(optionObj);
                 continue;
             }
@@ -270,4 +298,6 @@ public class SelectionUI : MonoBehaviour
             spawnedOptions[i].SetSelected(isSelected);
         }
     }
+    #endregion
 }
+

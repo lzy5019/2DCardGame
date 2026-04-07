@@ -1,24 +1,27 @@
-// 静态配置表
-
-using System.Collections.Generic;
+锘縰sing System.Collections.Generic;
 using UnityEngine;
 
 public class CardDatabase : MonoBehaviour
 {
     public static CardDatabase Instance;
 
+    #region 鏁版嵁
     public List<CardData> allCards = new List<CardData>();
 
-    private Dictionary<string, CardData> cardDict = new Dictionary<string, CardData>();
+    private readonly Dictionary<string, CardData> cardDict = new Dictionary<string, CardData>();
+    #endregion
 
+    #region 鐢熷懡鍛ㄦ湡
     private void Awake()
     {
         Instance = this;
         LoadAllCards();
-        Debug.Log("牌库读取完毕");
+        Debug.Log("Card database loaded.");
     }
+    #endregion
 
-    private void LoadAllCards()     // 读取所有卡牌
+    #region 鍔犺浇
+    private void LoadAllCards()
     {
         CardData[] loadedCards = Resources.LoadAll<CardData>("Cards");
 
@@ -31,13 +34,15 @@ public class CardDatabase : MonoBehaviour
             cardDict.Add(card.cardId, card);
         }
     }
+    #endregion
 
-    public CardData GetCardById(string id)      // 通过id查询卡牌
+    #region 鏌ヨ
+    public CardData GetCardById(string id)
     {
         return cardDict[id];
     }
 
-    public List<CardData> GetCardsByType(CardType type) // 通过种类查询卡牌
+    public List<CardData> GetCardsByType(CardType type)
     {
         List<CardData> result = new List<CardData>();
 
@@ -52,7 +57,7 @@ public class CardDatabase : MonoBehaviour
         return result;
     }
 
-    public List<CardData> GetCardsByCategory(CardCategory category)     // 通过科目查询卡牌
+    public List<CardData> GetCardsByCategory(CardCategory category)
     {
         List<CardData> result = new List<CardData>();
 
@@ -67,7 +72,7 @@ public class CardDatabase : MonoBehaviour
         return result;
     }
 
-    public List<CardData> GetCardsByCost(int cost)      // 通过费用查询卡牌
+    public List<CardData> GetCardsByCost(int cost)
     {
         List<CardData> result = new List<CardData>();
 
@@ -82,7 +87,7 @@ public class CardDatabase : MonoBehaviour
         return result;
     }
 
-    public List<CardData> GetCardsByScore(int score)      // 通过分数查询卡牌
+    public List<CardData> GetCardsByScore(int score)
     {
         List<CardData> result = new List<CardData>();
 
@@ -96,4 +101,6 @@ public class CardDatabase : MonoBehaviour
 
         return result;
     }
+    #endregion
 }
+

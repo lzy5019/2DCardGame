@@ -1,11 +1,12 @@
-public enum CardCategory
+锘縫ublic enum CardCategory
 {
-    Chinese,    // 语文
-    Math,       // 数学
-    English,    // 英语
-    Physics,    // 物理
-    Chemistry,  // 化学
-    Monster,    // 怪物
-    Biology,    // 生物
-    Basic       // 基本
+    Chinese,    // 璇枃绫诲埆
+    Math,       // 鏁板绫诲埆
+    English,    // 鑻辫绫诲埆
+    Physics,    // 鐗╃悊绫诲埆
+    Chemistry,  // 鍖栧绫诲埆
+    Monster,    // 鎬墿绫诲埆
+    Biology,    // 鐢熺墿绫诲埆
+    Basic       // 鍩虹绫诲埆
 }
+

@@ -1,12 +1,13 @@
-public enum CardType
+ï»¿public enum CardType
 {
-    Minion,     // Ëæ´Ó
-    Spell,      // ·¨Êõ
-    Hero,       // Ó¢ĞÛ
-    Treasure,   // ²Æ±¦
-    Basic,      // »ù±¾
-    Chaos,      // ÎÉÂÒ
-    Monster,    // ¹ÖÎï
-    Equipment,  // ×°±¸
-    Weapon      // ÎäÆ÷
+    Minion,     // éšä»å¡
+    Spell,      // æ³•æœ¯å¡
+    Hero,       // è‹±é›„å¡
+    Treasure,   // å®è—å¡
+    Basic,      // åŸºç¡€å¡
+    Chaos,      // æ··æ²Œå¡
+    Monster,    // æ€ªç‰©å¡
+    Equipment,  // è£…å¤‡å¡
+    Weapon      // æ­¦å™¨å¡
 }
+

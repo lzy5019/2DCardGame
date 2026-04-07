@@ -1,5 +1,4 @@
-using System.Collections;
-using System.Collections.Generic;
+ï»¿using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -8,17 +7,19 @@ public class PileBrowserUI : MonoBehaviour
 {
     public static PileBrowserUI Instance;
 
-    [Header("»ù´¡ÒıÓÃ")]
+    #region ç•Œé¢å¼•ç”¨
+    [Header("æ ¸å¿ƒå¼•ç”¨")]
     public GameObject cardPrefab;
     public GameObject pilePanel;
     public Transform contentRoot;
     public TMP_Text titleText;
     public Button closeButton;
     public GameObject emptyHintObject = null;
+    #endregion
 
+    #region è¿è¡Œæ—¶çŠ¶æ€
     public PlayerState localPlayer;
     private readonly List<GameObject> spawnedCards = new List<GameObject>();
-
     private string currentPileKey = "";
 
     public bool IsOpen
@@ -28,8 +29,9 @@ public class PileBrowserUI : MonoBehaviour
             return pilePanel != null && pilePanel.gameObject.activeSelf;
         }
     }
+    #endregion
 
-    #region ¡ª¡ª³õÊ¼»¯¡ª¡ª
+    #region ç”Ÿå‘½å‘¨æœŸ
     private void Awake()
     {
         if (Instance != null && Instance != this)
@@ -37,6 +39,7 @@ public class PileBrowserUI : MonoBehaviour
             Destroy(gameObject);
             return;
         }
+
         Instance = this;
     }
 
@@ -70,13 +73,16 @@ public class PileBrowserUI : MonoBehaviour
             Instance = null;
         }
     }
+    #endregion
 
+    #region æ³¨å†Œ
     public void RegisterLocalPlayer(PlayerState player)
     {
         localPlayer = player;
     }
     #endregion
 
+    #region æ‰“å¼€ä¸å…³é—­
     public void TogglePile(string pileKey, System.Action openAction)
     {
         if (IsOpen && currentPileKey == pileKey)
@@ -96,18 +102,23 @@ public class PileBrowserUI : MonoBehaviour
         {
             titleText.text = title;
         }
+
         RebuildCards(cardIDs);
         pilePanel.gameObject.SetActive(true);
     }
+
     public void ClosePile()
     {
         if (pilePanel != null)
         {
             pilePanel.gameObject.SetActive(false);
         }
+
         currentPileKey = "";
     }
+    #endregion
 
+    #region å¡ç‰Œæ¸²æŸ“
     private void RebuildCards(List<string> cardIDs)
     {
         ClearCards();
@@ -132,7 +143,7 @@ public class PileBrowserUI : MonoBehaviour
 
             if (CardDatabase.Instance == null)
             {
-                Debug.LogError("PileBrowserUI: CardDatabase.Instance ÊÇ null");
+                Debug.LogError("PileBrowserUI: CardDatabase.Instance is null.");
                 continue;
             }
 
@@ -140,7 +151,7 @@ public class PileBrowserUI : MonoBehaviour
 
             if (cardData == null)
             {
-                Debug.LogWarning("PileBrowserUI: ÕÒ²»µ½¿¨ÅÆ id = " + cardId);
+                Debug.LogWarning("PileBrowserUI: Card not found for id = " + cardId);
                 continue;
             }
 
@@ -154,7 +165,7 @@ public class PileBrowserUI : MonoBehaviour
             }
             else
             {
-                // Èç¹ûÄãÔİÊ±»¹Ã»¹Ò PileCardItemUI£¬ÖÁÉÙÒ²»á³¢ÊÔÖ±½Ó¸ø Image ¸³Í¼
+                // å¦‚æœå½“å‰è¿˜æ²¡æœ‰ä¸“ç”¨æ˜¾ç¤ºç»„ä»¶ï¼Œåˆ™é€€å›ä¸ºç›´æ¥èµ‹å€¼å›¾ç‰‡ã€‚
                 Image image = obj.GetComponent<Image>();
                 if (image != null)
                 {
@@ -184,8 +195,9 @@ public class PileBrowserUI : MonoBehaviour
 
         spawnedCards.Clear();
     }
+    #endregion
 
-    #region ¡ª¡ªÅÅÁĞº¯Êı¡ª¡ª
+    #region æ’åº
     private List<string> GetDisplayList(List<string> source, PileDisplayOrder order)
     {
         List<string> result = new List<string>(source);
@@ -230,7 +242,7 @@ public class PileBrowserUI : MonoBehaviour
     }
     #endregion
 
-    #region ¡ª¡ª°´¼ü°ó¶¨¿ì½İº¯Êı¡ª¡ª
+    #region å¿«æ·æ“ä½œ
     public void OpenDrawPile()
     {
         List<string> displayList = GetDisplayList(
@@ -238,7 +250,7 @@ public class PileBrowserUI : MonoBehaviour
             PileDisplayOrder.IdDescending
         );
 
-        OpenPile("³éÅÆ¶Ñ", displayList);
+        OpenPile("æŠ½ç‰Œå †", displayList);
     }
 
     public void OpenDiscardPile()
@@ -248,12 +260,12 @@ public class PileBrowserUI : MonoBehaviour
             PileDisplayOrder.IdDescending
         );
 
-        OpenPile("ÆúÅÆ¶Ñ", displayList);
+        OpenPile("å¼ƒç‰Œå †", displayList);
     }
 
     public void OpenHandPile()
     {
-        OpenPile("ÊÖÅÆ", new List<string>(localPlayer.handCardIds));
+        OpenPile("æ‰‹ç‰Œ", new List<string>(localPlayer.handCardIds));
     }
 
     public void OpenPlayedPile()
@@ -263,7 +275,7 @@ public class PileBrowserUI : MonoBehaviour
             PileDisplayOrder.KeepOriginal
         );
 
-        OpenPile("±¾»ØºÏ´ò³ö", displayList);
+        OpenPile("æœ¬å›åˆå‡ºç‰Œ", displayList);
     }
 
     public void OpenOwnedPile()
@@ -273,14 +285,15 @@ public class PileBrowserUI : MonoBehaviour
             PileDisplayOrder.IdDescending
         );
 
-        OpenPile("ÅÆ¿â×ÜÀÀ", displayList);
+        OpenPile("ç‰Œåº“æ€»è§ˆ", displayList);
     }
     #endregion
 }
 
 public enum PileDisplayOrder
 {
-    KeepOriginal,   // ±£³ÖÔ­Ë³Ğò
-    IdAscending,    // °´ID´ÓĞ¡µ½´ó
-    IdDescending    // °´ID´Ó´óµ½Ğ¡
+    KeepOriginal,   // ä¿æŒåŸé¡ºåº
+    IdAscending,    // æŒ‰ç¼–å·ä»å°åˆ°å¤§æ’åº
+    IdDescending    // æŒ‰ç¼–å·ä»å¤§åˆ°å°æ’åº
 }
+

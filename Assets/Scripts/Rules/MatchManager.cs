@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+ï»¿using System.Collections.Generic;
 using Mirror;
 using UnityEngine;
 
@@ -6,10 +6,13 @@ public class MatchManager : NetworkBehaviour
 {
     public static MatchManager Instance;
 
-    [Header("Íæ¼ÒÁĞ±í")]
+    #region ç©å®¶
+    [Header("ç©å®¶")]
     public readonly SyncList<PlayerState> playerList = new SyncList<PlayerState>();
+    #endregion
 
-    [Header("¿ª¾ÖÅäÖÃ")]
+    #region èµ·å§‹å¡ç»„
+    [Header("èµ·å§‹å¡ç»„")]
     public List<string> startCards = new List<string>()
     {
         "00001",
@@ -23,17 +26,25 @@ public class MatchManager : NetworkBehaviour
         "00002",
         "00002"
     };
+    #endregion
 
-    [Header("¶Ô¾Ö×´Ì¬")]
+    #region å¯¹å±€çŠ¶æ€
+    [Header("å¯¹å±€çŠ¶æ€")]
     [SyncVar] public bool gameStarted = false;
     [SyncVar] public int currentTurnPlayerIndex = -1;
+    [SyncVar] public bool waitingForPublicActionDrain = false;
 
-    [Header("»ØºÏ¼ÆÊ±")]
+    [Header("å›åˆè®¡æ—¶")]
     [SerializeField] private float turnDurationSeconds = 60f;
     [SyncVar] public double currentTurnEndTime;
     [SyncVar] private bool turnTimerRunning;
-    private bool isEndingTurn;
 
+    private bool isEndingTurn;
+    private int currentDrainWaitId = 0;
+    private readonly HashSet<uint> drainedPlayerNetIds = new HashSet<uint>();
+    #endregion
+
+    #region ç”Ÿå‘½å‘¨æœŸ
     private void Awake()
     {
         if (Instance != null && Instance != this)
@@ -57,8 +68,9 @@ public class MatchManager : NetworkBehaviour
             EndCurrentTurn();
         }
     }
+    #endregion
 
-    #region Íæ¼Ò×¢²á
+    #region ç©å®¶æ³¨å†Œ
     [Server]
     public void RegisterPlayer(PlayerState player)
     {
@@ -66,7 +78,7 @@ public class MatchManager : NetworkBehaviour
         if (playerList.Contains(player)) return;
 
         playerList.Add(player);
-        Debug.Log("×¢²áÍæ¼Ò³É¹¦£¬µ±Ç°Íæ¼ÒÊı£º" + playerList.Count);
+        Debug.Log("Player registered. Count: " + playerList.Count);
 
         if (playerList.Count >= MyNetworkRoomManager.Instance.gamePlayerCount)
         {
@@ -81,21 +93,22 @@ public class MatchManager : NetworkBehaviour
         if (!playerList.Contains(player)) return;
 
         playerList.Remove(player);
-        Debug.Log("ÒÆ³ıÍæ¼Ò³É¹¦£¬µ±Ç°Íæ¼ÒÊı£º" + playerList.Count);
+        Debug.Log("Player unregistered. Count: " + playerList.Count);
     }
     #endregion
 
-    #region ¿ª¾ÖÁ÷³Ì
+    #region å¯¹å±€æµç¨‹
     [Server]
     public void StartGame()
     {
         if (gameStarted) return;
         if (playerList.Count == 0)
         {
-            Debug.Log("Ã»ÓĞÍæ¼Ò£¬ÎŞ·¨¿ªÊ¼ÓÎÏ·");
+            Debug.Log("No players, cannot start game.");
             return;
         }
-        Debug.Log("ÓÎÏ·¿ªÊ¼");
+
+        Debug.Log("Game started");
         gameStarted = true;
 
         for (int i = 0; i < playerList.Count; i++)
@@ -111,9 +124,7 @@ public class MatchManager : NetworkBehaviour
         currentTurnPlayerIndex = 0;
         StartCurrentTurn();
     }
-    #endregion
 
-    #region »ØºÏÁ÷³Ì
     [Server]
     public void StartCurrentTurn()
     {
@@ -128,7 +139,7 @@ public class MatchManager : NetworkBehaviour
         turnTimerRunning = true;
 
         currentPlayer.StartTurn();
-        Debug.Log("¿ªÊ¼Íæ¼Ò»ØºÏ£º" + currentPlayer.playerName);
+        Debug.Log("Start turn: " + currentPlayer.playerName);
     }
 
     [Server]
@@ -140,15 +151,14 @@ public class MatchManager : NetworkBehaviour
 
         PlayerState currentPlayer = playerList[currentTurnPlayerIndex];
         if (currentPlayer == null) return;
-
         if (isEndingTurn) return;
-        isEndingTurn = true;
 
+        isEndingTurn = true;
         turnTimerRunning = false;
         currentTurnEndTime = 0;
 
         currentPlayer.EndTurn();
-        NextTurn();
+        BeginWaitForPublicActionDrain();
 
         isEndingTurn = false;
     }
@@ -169,7 +179,88 @@ public class MatchManager : NetworkBehaviour
     }
     #endregion
 
-    #region ²éÑ¯¸¨Öú
+    #region å…¬å…±åŠ¨ä½œé˜Ÿåˆ—
+    [Server]
+    private void BeginWaitForPublicActionDrain()
+    {
+        waitingForPublicActionDrain = true;
+        currentDrainWaitId++;
+        drainedPlayerNetIds.Clear();
+
+        RpcWaitForPublicActionDrain(currentDrainWaitId);
+    }
+
+    [ClientRpc]
+    private void RpcWaitForPublicActionDrain(int waitId)
+    {
+        if (PublicActionQueueUI.Instance != null)
+        {
+            PublicActionQueueUI.Instance.WaitUntilIdleThenAck(waitId);
+            return;
+        }
+
+        if (NetworkClient.localPlayer == null)
+            return;
+
+        PlayerState localPlayer = NetworkClient.localPlayer.GetComponent<PlayerState>();
+        if (localPlayer != null)
+        {
+            localPlayer.RequestReportPublicActionQueueDrained(waitId);
+        }
+    }
+
+    [Server]
+    public void ReportPublicActionQueueDrained(PlayerState player, int waitId)
+    {
+        if (!waitingForPublicActionDrain)
+            return;
+        if (waitId != currentDrainWaitId)
+            return;
+        if (player == null)
+            return;
+
+        drainedPlayerNetIds.Add(player.netId);
+
+        int validPlayerCount = 0;
+        for (int i = 0; i < playerList.Count; i++)
+        {
+            if (playerList[i] != null)
+            {
+                validPlayerCount++;
+            }
+        }
+
+        if (drainedPlayerNetIds.Count >= validPlayerCount)
+        {
+            waitingForPublicActionDrain = false;
+            drainedPlayerNetIds.Clear();
+            NextTurn();
+        }
+    }
+
+    [Server]
+    public void BroadcastPublicAction(int actorPlayerIndex, string cardId, PublicActionType actionType)
+    {
+        RpcBroadcastPublicAction(actorPlayerIndex, cardId, (int)actionType);
+    }
+
+    [ClientRpc]
+    private void RpcBroadcastPublicAction(int actorPlayerIndex, string cardId, int actionTypeValue)
+    {
+        if (PublicActionQueueUI.Instance == null)
+            return;
+
+        PublicActionQueueUI.Instance.Enqueue(
+            new PublicActionEvent(
+                actorPlayerIndex,
+                cardId,
+                (PublicActionType)actionTypeValue
+            )
+        );
+    }
+    #endregion
+
+    #region æŸ¥è¯¢æ¥å£
     public PlayerState GetCurrentPlayer()
     {
         if (playerList.Count == 0) return null;
