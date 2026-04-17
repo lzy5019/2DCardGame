@@ -60,7 +60,8 @@ public class PlayerEndTurn : MonoBehaviour
 
         if (localPlayer != null && MatchManager.Instance != null && MatchManager.Instance.gameStarted)
         {
-            shouldShow = localPlayer.isMyTurn;
+            bool drawFxBusy = HandDisplayManager.Instance != null && HandDisplayManager.Instance.IsIncomingDrawFxBusy();
+            shouldShow = localPlayer.isMyTurn && !drawFxBusy;
         }
 
         endTurnButtonObject.SetActive(shouldShow);
@@ -72,6 +73,7 @@ public class PlayerEndTurn : MonoBehaviour
         if (MatchManager.Instance == null) return;
         if (!MatchManager.Instance.gameStarted) return;
         if (!localPlayer.isMyTurn) return;
+        if (HandDisplayManager.Instance != null && HandDisplayManager.Instance.IsIncomingDrawFxBusy()) return;
 
         OnClickEndTurn();
     }
@@ -79,6 +81,15 @@ public class PlayerEndTurn : MonoBehaviour
     private void OnClickEndTurn()
     {
         if (localPlayer == null) return;
+        if (HandDisplayManager.Instance != null && HandDisplayManager.Instance.IsIncomingDrawFxBusy())
+        {
+            if (HintManager.Instance != null)
+            {
+                HintManager.Instance.ShowHint("请等待抽牌动画结束");
+            }
+
+            return;
+        }
 
         localPlayer.RequestEndTurn();
     }

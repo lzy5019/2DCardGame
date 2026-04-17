@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using Mirror;
 using UnityEngine;
@@ -12,6 +12,9 @@ public class ShopPanelUI : MonoBehaviour
     public GameObject centerShopPanel;
     public List<ShopSlotUI> baseSlots = new List<ShopSlotUI>();
     public List<ShopSlotUI> centerSlots = new List<ShopSlotUI>();
+    [SerializeField] private RectTransform buyFxTarget;
+    [SerializeField] private ShopPurchaseFxUI purchaseFxPrefab;
+    [SerializeField] private ShopDefeatFxUI defeatFxPrefab;
     #endregion
 
     #region 运行时状态
@@ -161,7 +164,7 @@ public class ShopPanelUI : MonoBehaviour
 
         CardData card = slot.card;
 
-        if (card.cardCategory == CardCategory.Monster)
+        if (card.cardType == CardType.Enemy)
         {
             if (localPlayer.attack < card.cost)
             {
@@ -187,6 +190,100 @@ public class ShopPanelUI : MonoBehaviour
         }
 
         return true;
+    }
+    #endregion
+
+    #region 本地特效
+    public void PlayLocalShopResultFx(int slotIndex, string cardId, bool isBaseShop)
+    {
+        if (string.IsNullOrEmpty(cardId))
+            return;
+
+        CardData card = CardDatabase.Instance != null
+            ? CardDatabase.Instance.GetCardById(cardId)
+            : null;
+
+        if (card == null || card.cardSprite == null)
+            return;
+
+        ShopSlotUI targetSlot = GetTargetSlot(slotIndex, isBaseShop);
+        if (targetSlot == null)
+            return;
+
+        RectTransform targetSlotRect = targetSlot.transform as RectTransform;
+        if (targetSlotRect == null)
+            return;
+
+        if (card.cardType == CardType.Enemy)
+        {
+            if (defeatFxPrefab == null)
+                return;
+
+            ShopDefeatFxUI defeatFx = Instantiate(defeatFxPrefab, targetSlotRect, false);
+            PrepareSpawnedFxRect(defeatFx.transform as RectTransform);
+            StartCoroutine(PlayDefeatFxAndDestroy(defeatFx, card.cardSprite));
+            return;
+        }
+
+        if (buyFxTarget == null || purchaseFxPrefab == null)
+            return;
+
+        ShopPurchaseFxUI purchaseFx = Instantiate(purchaseFxPrefab, targetSlotRect, false);
+        PrepareSpawnedFxRect(purchaseFx.transform as RectTransform);
+        StartCoroutine(PlayPurchaseFxAndDestroy(purchaseFx, card.cardSprite, buyFxTarget));
+    }
+
+    private ShopSlotUI GetTargetSlot(int slotIndex, bool isBaseShop)
+    {
+        List<ShopSlotUI> slotList = isBaseShop ? baseSlots : centerSlots;
+        if (slotList == null)
+            return null;
+
+        if (slotIndex < 0 || slotIndex >= slotList.Count)
+            return null;
+
+        return slotList[slotIndex];
+    }
+
+    private IEnumerator PlayPurchaseFxAndDestroy(ShopPurchaseFxUI purchaseFx, Sprite cardSprite, RectTransform targetRect)
+    {
+        if (purchaseFx == null)
+            yield break;
+
+        yield return purchaseFx.PlayToTargetRoutine(cardSprite, targetRect);
+
+        if (purchaseFx != null)
+        {
+            Destroy(purchaseFx.gameObject);
+        }
+    }
+
+    private IEnumerator PlayDefeatFxAndDestroy(ShopDefeatFxUI defeatFx, Sprite cardSprite)
+    {
+        if (defeatFx == null)
+            yield break;
+
+        yield return defeatFx.PlayDefeatRoutine(cardSprite);
+
+        if (defeatFx != null)
+        {
+            Destroy(defeatFx.gameObject);
+        }
+    }
+
+    private void PrepareSpawnedFxRect(RectTransform fxRect)
+    {
+        if (fxRect == null)
+            return;
+
+        fxRect.anchorMin = Vector2.zero;
+        fxRect.anchorMax = Vector2.one;
+        fxRect.offsetMin = Vector2.zero;
+        fxRect.offsetMax = Vector2.zero;
+        fxRect.anchoredPosition = Vector2.zero;
+        fxRect.localScale = Vector3.one;
+        fxRect.localRotation = Quaternion.identity;
+        fxRect.SetAsLastSibling();
     }
     #endregion
 

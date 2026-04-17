@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using Mirror;
 using UnityEngine;
 
@@ -33,6 +33,7 @@ public class MatchManager : NetworkBehaviour
     [SyncVar] public bool gameStarted = false;
     [SyncVar] public int currentTurnPlayerIndex = -1;
     [SyncVar] public bool waitingForPublicActionDrain = false;
+    [SyncVar] public int turnCount = 0;
 
     [Header("回合计时")]
     [SerializeField] private float turnDurationSeconds = 60f;
@@ -122,6 +123,7 @@ public class MatchManager : NetworkBehaviour
         }
 
         currentTurnPlayerIndex = 0;
+        turnCount = 1;
         StartCurrentTurn();
     }
 
@@ -173,13 +175,14 @@ public class MatchManager : NetworkBehaviour
         if (currentTurnPlayerIndex >= playerList.Count)
         {
             currentTurnPlayerIndex = 0;
+            turnCount++;
         }
 
         StartCurrentTurn();
     }
     #endregion
 
-    #region 公共动作队列
+    #region 公共演出队列
     [Server]
     private void BeginWaitForPublicActionDrain()
     {
@@ -241,22 +244,53 @@ public class MatchManager : NetworkBehaviour
     [Server]
     public void BroadcastPublicAction(int actorPlayerIndex, string cardId, PublicActionType actionType)
     {
-        RpcBroadcastPublicAction(actorPlayerIndex, cardId, (int)actionType);
+        // 旧接口继续保留，内部统一转成新的演出事件。
+        BroadcastPresentationEvent(
+            PresentationEvent.CreateLegacyAction(actorPlayerIndex, cardId, actionType)
+        );
+    }
+
+    [Server]
+    public void BroadcastPresentationEvent(PresentationEvent presentationEvent)
+    {
+        RpcBroadcastPresentationEvent(
+            presentationEvent.actorPlayerIndex,
+            (int)presentationEvent.presentationType,
+            (int)presentationEvent.presentationStyle,
+            presentationEvent.legacyActionTypeValue,
+            presentationEvent.sourceCardIds,
+            presentationEvent.beforeCardIds,
+            presentationEvent.afterCardIds,
+            presentationEvent.message
+        );
     }
 
     [ClientRpc]
-    private void RpcBroadcastPublicAction(int actorPlayerIndex, string cardId, int actionTypeValue)
+    private void RpcBroadcastPresentationEvent(
+        int actorPlayerIndex,
+        int presentationTypeValue,
+        int presentationStyleValue,
+        int legacyActionTypeValue,
+        string[] sourceCardIds,
+        string[] beforeCardIds,
+        string[] afterCardIds,
+        string message)
     {
         if (PublicActionQueueUI.Instance == null)
             return;
 
-        PublicActionQueueUI.Instance.Enqueue(
-            new PublicActionEvent(
-                actorPlayerIndex,
-                cardId,
-                (PublicActionType)actionTypeValue
-            )
+        PresentationEvent presentationEvent = new PresentationEvent(
+            actorPlayerIndex,
+            (PresentationType)presentationTypeValue,
+            (PresentationStyle)presentationStyleValue,
+            legacyActionTypeValue,
+            sourceCardIds,
+            beforeCardIds,
+            afterCardIds,
+            message
         );
+
+        PublicActionQueueUI.Instance.Enqueue(presentationEvent);
     }
     #endregion
 

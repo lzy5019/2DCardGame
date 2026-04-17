@@ -1,4 +1,4 @@
-﻿using Mirror;
+using Mirror;
 using System.Collections.Generic;
 using UnityEngine;
 using Steamworks;
@@ -28,6 +28,7 @@ public class PlayerState : NetworkBehaviour
     public readonly SyncList<string> handCardIds = new SyncList<string>();
     public readonly SyncList<string> playedCardIds = new SyncList<string>();
     public readonly SyncList<string> ownedCardIds = new SyncList<string>();
+    public readonly SyncList<string> banishCardIds = new SyncList<string>();    // 放逐堆
     public readonly SyncList<string> equippedCardIds = new SyncList<string>();
     public readonly SyncList<bool> equippedCardUsedFlags = new SyncList<bool>();
     [SyncVar] public string equippedWeaponCardId = "";
@@ -36,6 +37,11 @@ public class PlayerState : NetworkBehaviour
 
     [Header("本地玩家界面")]
     [SerializeField] private GameObject playerCanvas;
+    private int localPendingDrawDisplayCount = 0;
+    private int localPendingScoreCompensation = 0;
+    private int localPendingHandRevealCount = 0;
+    private int localPendingReshuffleDrawCompensation = 0;
+    private int localPendingReshuffleDiscardCompensation = 0;
 
     // 选择状态分为服务器端保存的负载，以及本地客户端界面展示的映射。
     [Header("待处理选择")]
@@ -49,6 +55,7 @@ public class PlayerState : NetworkBehaviour
     private bool hasPendingPublicAction = false;
     private string pendingPublicCardId = "";
     private PublicActionType pendingPublicActionType = PublicActionType.PlayCard;
+    private readonly List<string> playedCardHistoryIds = new List<string>();
 
     #region 玩家初始化
     [Server]
@@ -78,10 +85,12 @@ public class PlayerState : NetworkBehaviour
         handCardIds.Clear();
         playedCardIds.Clear();
         ownedCardIds.Clear();
+        banishCardIds.Clear();
         equippedCardIds.Clear();
         equippedCardUsedFlags.Clear();
         equippedWeaponCardId = "";
         equippedWeaponUsed = false;
+        playedCardHistoryIds.Clear();
         ClearPendingPublicAction();
     }
     public override void OnStartServer()
@@ -110,6 +119,7 @@ public class PlayerState : NetworkBehaviour
     public override void OnStartLocalPlayer()
     {
         base.OnStartLocalPlayer();
+        ResetLocalDrawDisplayState();
 
         if (SteamManager.Initialized)
         {
@@ -147,6 +157,11 @@ public class PlayerState : NetworkBehaviour
         if (EquipmentZoneUI.Instance != null)
         {
             EquipmentZoneUI.Instance.RegisterLocalPlayer(this);
+        }
+
+        if (LocalTurnStartFxSpawner.Instance != null)
+        {
+            LocalTurnStartFxSpawner.Instance.RegisterLocalPlayer(this);
         }
     }
     [Command]
@@ -198,6 +213,7 @@ public class PlayerState : NetworkBehaviour
 
         playedCardIds.Clear();
         playedEquipmentIds.Clear();
+        playedCardHistoryIds.Clear();
 
         for (int i = 0; i < handCardIds.Count; i++)
         {
@@ -280,6 +296,14 @@ public class PlayerState : NetworkBehaviour
         MatchManager.Instance.BroadcastPublicAction(playerIndex, cardId, actionType);
     }
 
+    private void BroadcastPresentationEvent(PresentationEvent presentationEvent)
+    {
+        if (MatchManager.Instance == null)
+            return;
+
+        MatchManager.Instance.BroadcastPresentationEvent(presentationEvent);
+    }
+
     private void CachePendingPublicAction(string cardId, PublicActionType actionType)
     {
         hasPendingPublicAction = true;
@@ -292,6 +316,205 @@ public class PlayerState : NetworkBehaviour
         hasPendingPublicAction = false;
         pendingPublicCardId = "";
         pendingPublicActionType = PublicActionType.PlayCard;
+    }
+
+    private string[] WrapCardId(string cardId)
+    {
+        if (string.IsNullOrEmpty(cardId))
+            return Array.Empty<string>();
+
+        return new[] { cardId };
+    }
+
+    [TargetRpc]
+    private void TargetPlayShopResultFx(NetworkConnectionToClient target, int slotIndex, string cardId, bool isBaseShop)
+    {
+        if (ShopPanelUI.Instance == null)
+            return;
+
+        ShopPanelUI.Instance.PlayLocalShopResultFx(slotIndex, cardId, isBaseShop);
+    }
+
+    [Server]
+    public void ShowHintToOwner(string message)
+    {
+        if (connectionToClient == null)
+            return;
+
+        TargetShowHint(connectionToClient, message);
+    }
+
+    [TargetRpc]
+    private void TargetShowHint(NetworkConnectionToClient target, string message)
+    {
+        if (HintManager.Instance == null)
+            return;
+
+        HintManager.Instance.ShowHint(message);
+    }
+
+    [TargetRpc]
+    private void TargetPlayHandTransformFx(NetworkConnectionToClient target, int handIndex, string oldCardId, string newCardId)
+    {
+        if (HandDisplayManager.Instance == null)
+            return;
+
+        HandDisplayManager.Instance.PlayTransformFxByIndex(handIndex, oldCardId, newCardId);
+    }
+
+    [TargetRpc]
+    private void TargetNotifyIncomingDrawFx(NetworkConnectionToClient target, string cardId, int drawFxModeRaw)
+    {
+        HandCardDrawFxMode drawFxMode = HandCardDrawFxMode.ToHand;
+        if (Enum.IsDefined(typeof(HandCardDrawFxMode), drawFxModeRaw))
+        {
+            drawFxMode = (HandCardDrawFxMode)drawFxModeRaw;
+        }
+
+        NotifyLocalIncomingDrawVisual(cardId, drawFxMode);
+
+        if (HandDisplayManager.Instance == null)
+        {
+            NotifyLocalDrawVisualStarted(cardId, drawFxMode);
+            NotifyLocalDrawVisualResolved(cardId, drawFxMode);
+            return;
+        }
+
+        HandDisplayManager.Instance.NotifyIncomingDrawFx(cardId, drawFxMode);
+    }
+
+    [TargetRpc]
+    private void TargetNotifyIncomingReshuffleFx(NetworkConnectionToClient target, int movedCardCount)
+    {
+        NotifyLocalIncomingReshuffleVisual(movedCardCount);
+
+        if (HandDisplayManager.Instance == null)
+        {
+            NotifyLocalReshuffleVisualResolved(movedCardCount);
+            return;
+        }
+
+        HandDisplayManager.Instance.NotifyIncomingReshuffleFx(movedCardCount);
+    }
+
+    public int GetDisplayedDrawPileCount()
+    {
+        if (!isLocalPlayer)
+            return drawPile.Count;
+
+        return Mathf.Max(0, drawPile.Count + Mathf.Max(0, localPendingDrawDisplayCount) - Mathf.Max(0, localPendingReshuffleDrawCompensation));
+    }
+
+    public int GetDisplayedDiscardPileCount()
+    {
+        if (!isLocalPlayer)
+            return discardPile.Count;
+
+        return Mathf.Max(0, discardPile.Count + Mathf.Max(0, localPendingReshuffleDiscardCompensation));
+    }
+
+    public int GetDisplayedScore()
+    {
+        if (!isLocalPlayer)
+            return score;
+
+        return score + Mathf.Max(0, localPendingScoreCompensation);
+    }
+
+    public int GetDisplayedHandCount()
+    {
+        if (!isLocalPlayer)
+            return handCount;
+
+        return Mathf.Max(0, handCount - Mathf.Max(0, localPendingHandRevealCount));
+    }
+
+    private void ResetLocalDrawDisplayState()
+    {
+        localPendingDrawDisplayCount = 0;
+        localPendingScoreCompensation = 0;
+        localPendingHandRevealCount = 0;
+        localPendingReshuffleDrawCompensation = 0;
+        localPendingReshuffleDiscardCompensation = 0;
+        RefreshLocalDrawDisplayUi();
+    }
+
+    private void RefreshLocalDrawDisplayUi()
+    {
+        if (!isLocalPlayer)
+            return;
+
+        if (PileCountUI.Instance != null)
+        {
+            PileCountUI.Instance.RefreshCounts();
+        }
+    }
+
+    public void NotifyLocalIncomingDrawVisual(string cardId, HandCardDrawFxMode drawFxMode)
+    {
+        if (!isLocalPlayer)
+            return;
+
+        localPendingDrawDisplayCount++;
+
+        if (drawFxMode == HandCardDrawFxMode.ToHand)
+        {
+            localPendingHandRevealCount++;
+        }
+
+        if (cardId == "19002")
+        {
+            localPendingScoreCompensation++;
+        }
+
+        RefreshLocalDrawDisplayUi();
+    }
+
+    public void NotifyLocalDrawVisualStarted(string cardId, HandCardDrawFxMode drawFxMode)
+    {
+        if (!isLocalPlayer)
+            return;
+
+        localPendingDrawDisplayCount = Mathf.Max(0, localPendingDrawDisplayCount - 1);
+        RefreshLocalDrawDisplayUi();
+    }
+
+    public void NotifyLocalDrawVisualResolved(string cardId, HandCardDrawFxMode drawFxMode)
+    {
+        if (!isLocalPlayer)
+            return;
+
+        if (drawFxMode == HandCardDrawFxMode.ToHand)
+        {
+            localPendingHandRevealCount = Mathf.Max(0, localPendingHandRevealCount - 1);
+        }
+
+        if (cardId == "19002")
+        {
+            localPendingScoreCompensation = Mathf.Max(0, localPendingScoreCompensation - 1);
+        }
+
+        RefreshLocalDrawDisplayUi();
+    }
+
+    public void NotifyLocalIncomingReshuffleVisual(int movedCardCount)
+    {
+        if (!isLocalPlayer || movedCardCount <= 0)
+            return;
+
+        localPendingReshuffleDrawCompensation += movedCardCount;
+        localPendingReshuffleDiscardCompensation += movedCardCount;
+        RefreshLocalDrawDisplayUi();
+    }
+
+    public void NotifyLocalReshuffleVisualResolved(int movedCardCount)
+    {
+        if (!isLocalPlayer || movedCardCount <= 0)
+            return;
+
+        localPendingReshuffleDrawCompensation = Mathf.Max(0, localPendingReshuffleDrawCompensation - movedCardCount);
+        localPendingReshuffleDiscardCompensation = Mathf.Max(0, localPendingReshuffleDiscardCompensation - movedCardCount);
+        RefreshLocalDrawDisplayUi();
     }
     #endregion
 
@@ -337,6 +560,8 @@ public class PlayerState : NetworkBehaviour
     {
         if (!isLocalPlayer)
             return;
+        if (handIndex < 0 || handIndex >= handCardIds.Count)
+            return;
 
         if (!isMyTurn)
         {
@@ -355,6 +580,16 @@ public class PlayerState : NetworkBehaviour
             }
             return;
         }
+
+        string cardId = handCardIds[handIndex];
+        if (cardId == "00006" && handCardIds.Count <= 1)
+        {
+            if (HintManager.Instance != null)
+            {
+                HintManager.Instance.ShowHint("没有可放逐的手牌");
+            }
+            return;
+        }
         
         CmdRequestPlayCard(handIndex);
     }
@@ -370,27 +605,24 @@ public class PlayerState : NetworkBehaviour
 
         CardData card = CardDatabase.Instance.GetCardById(cardId);
         if (card == null) return;
+        if (cardId == "00006" && handCardIds.Count <= 1) return;
 
         switch (card.cardType)
         {
-            case CardType.Equipment:
+            case CardType.Field:
                 if (!EquipCardFromHand(cardId, handIndex))
                     return;
-                Debug.Log("Equip: " + cardId);
                 break;
 
             case CardType.Weapon:
                 if (!EquipWeaponFromHand(cardId, handIndex))
                     return;
-                Debug.Log("Equip weapon: " + cardId);
                 break;
 
             default:
                 {
                     if (!PlayCardFromHand(cardId, handIndex))
                         return;
-
-                    Debug.Log("Play: " + cardId);
 
                     CardEffectResult effectResult = CardEffectManager.Instance.ResolveCardEffect(playerIndex, cardId);
                     if (!HandleEffectResultForPublicAction(effectResult, cardId, PublicActionType.PlayCard))
@@ -427,13 +659,15 @@ public class PlayerState : NetworkBehaviour
 
         string cardId = ShopState.Instance.centerCardIds[slotIndex];
         CardData card = CardDatabase.Instance.GetCardById(cardId);
-        if (card.cardCategory == CardCategory.Monster)
+        if (card.cardType == CardType.Enemy)
         {
             if (SpendAttack(card.cost))
             {
                 CardEffectResult effectResult = CardEffectManager.Instance.ResolveCardEffect(playerIndex, cardId);
                 if (!HandleEffectResultForPublicAction(effectResult, cardId, PublicActionType.DefeatCenterMonster))
                     return;
+
+                TargetPlayShopResultFx(connectionToClient, slotIndex, cardId, false);
             }
             else { return; }
         }
@@ -443,13 +677,13 @@ public class PlayerState : NetworkBehaviour
             {
                 AddCardToOwned(cardId);
                 AddCardToDiscard(cardId);
+                TargetPlayShopResultFx(connectionToClient, slotIndex, cardId, false);
                 BroadcastPublicAction(cardId, PublicActionType.BuyCenterCard);
             }
             else { return; }
         }
 
         ShopState.Instance.RemoveCenterCard(slotIndex);
-        Debug.Log(playerName + " bought center card: " + cardId + " slot: " + slotIndex);
     }
     [Command]
     private void CmdRequestBuyBaseCard(int baseIndex)
@@ -459,11 +693,12 @@ public class PlayerState : NetworkBehaviour
 
         string cardId = ShopState.Instance.baseCardIds[baseIndex];
         CardData card = CardDatabase.Instance.GetCardById(cardId);
-        if (card.cardCategory == CardCategory.Monster)
+        if (card.cardType == CardType.Enemy)
         {
             if (SpendAttack(card.cost))
             {
                 currentPlayer.AddScore(1);
+                TargetPlayShopResultFx(connectionToClient, baseIndex, cardId, true);
                 BroadcastPublicAction(cardId, PublicActionType.DefeatBaseMonster);
             }
             else { return; }
@@ -474,12 +709,11 @@ public class PlayerState : NetworkBehaviour
             {
                 AddCardToOwned(cardId);
                 AddCardToDiscard(cardId);
+                TargetPlayShopResultFx(connectionToClient, baseIndex, cardId, true);
                 BroadcastPublicAction(cardId, PublicActionType.BuyBaseCard);
             }
             else { return; }
         }
-
-        Debug.Log(playerName + " bought base card: " + cardId + " slot: " + baseIndex);
     }
     
     [Server]
@@ -489,12 +723,38 @@ public class PlayerState : NetworkBehaviour
 
         ownedCardIds.Add(cardId);
     }
+
+    [Server]
+    public bool RemoveCardFromOwned(string cardId)
+    {
+        if (string.IsNullOrEmpty(cardId)) return false;
+
+        int index = ownedCardIds.IndexOf(cardId);
+        if (index < 0) return false;
+
+        ownedCardIds.RemoveAt(index);
+        return true;
+    }
     [Server]
     public void AddCardToDiscard(string cardId)
     {
         if (string.IsNullOrEmpty(cardId)) return;
 
         discardPile.Add(cardId);
+    }
+
+    [Server]
+    public CardEffectResult AddCardToBanish(string cardId)
+    {
+        if (string.IsNullOrEmpty(cardId)) return CardEffectResult.Failed;
+
+        RemoveCardFromOwned(cardId);
+        banishCardIds.Add(cardId);
+
+        if (CardEffectManager.Instance == null)
+            return CardEffectResult.Applied;
+
+        return CardEffectManager.Instance.ResolveBanishEnterEffect(playerIndex, cardId);
     }
     [Server]
     public void AddCardToDrawPile(string cardId)
@@ -514,6 +774,8 @@ public class PlayerState : NetworkBehaviour
         handCardIds.Clear();
         playedCardIds.Clear();
         ownedCardIds.Clear();
+        banishCardIds.Clear();
+        playedCardHistoryIds.Clear();
 
         if (startCards == null) return;
 
@@ -548,6 +810,12 @@ public class PlayerState : NetworkBehaviour
     {
         if (discardPile.Count == 0) return;
 
+        int movedCardCount = discardPile.Count;
+        if (connectionToClient != null)
+        {
+            TargetNotifyIncomingReshuffleFx(connectionToClient, movedCardCount);
+        }
+
         for (int i = 0; i < discardPile.Count; i++)
         {
             drawPile.Add(discardPile[i]);
@@ -574,10 +842,19 @@ public class PlayerState : NetworkBehaviour
         }
 
         string cardId = drawPile[0];
-        drawPile.RemoveAt(0);
-        handCardIds.Add(cardId);
+        if (connectionToClient != null)
+        {
+            HandCardDrawFxMode drawFxMode = HandCardDrawFxMode.ToHand;
+            if (CardEffectManager.Instance != null)
+            {
+                drawFxMode = CardEffectManager.Instance.GetDrawFxMode(cardId);
+            }
 
-        UpdateHandCount();
+            TargetNotifyIncomingDrawFx(connectionToClient, cardId, (int)drawFxMode);
+        }
+
+        drawPile.RemoveAt(0);
+        EnterHandCard(cardId, false, true);
         return cardId;
     }
     [Server]
@@ -600,9 +877,33 @@ public class PlayerState : NetworkBehaviour
 
         handCardIds.RemoveAt(index);
         playedCardIds.Add(cardId);
+        playedCardHistoryIds.Add(cardId);
 
         UpdateHandCount();
         return true;
+    }
+
+    [Server]
+    public string GetPreviousPlayedCardId()
+    {
+        if (playedCardHistoryIds.Count < 2)
+            return "";
+
+        return playedCardHistoryIds[playedCardHistoryIds.Count - 2];
+    }
+
+    [Server]
+    public CardEffectResult BanishPlayedCardById(string cardId)
+    {
+        if (string.IsNullOrEmpty(cardId))
+            return CardEffectResult.Failed;
+
+        int playedIndex = playedCardIds.IndexOf(cardId);
+        if (playedIndex < 0)
+            return CardEffectResult.Failed;
+
+        playedCardIds.RemoveAt(playedIndex);
+        return AddCardToBanish(cardId);
     }
 
     [Server]
@@ -615,6 +916,7 @@ public class PlayerState : NetworkBehaviour
         equippedCardIds.Add(cardId);
         equippedCardUsedFlags.Add(false);
         playedEquipmentIds.Add(cardId);
+        playedCardHistoryIds.Add(cardId);
         UpdateHandCount();
 
         CardEffectResult effectResult = CardEffectManager.Instance.ResolveEquipEnterEffect(playerIndex, cardId);
@@ -642,6 +944,7 @@ public class PlayerState : NetworkBehaviour
         equippedWeaponCardId = cardId;
         equippedWeaponUsed = false;
         playedEquipmentIds.Add(cardId);
+        playedCardHistoryIds.Add(cardId);
 
         UpdateHandCount();
 
@@ -672,9 +975,212 @@ public class PlayerState : NetworkBehaviour
     }
 
     [Server]
+    public bool TransformHandCardByIndex(int handIndex, string newCardId, out string oldCardId)
+    {
+        oldCardId = "";
+
+        if (handIndex < 0 || handIndex >= handCardIds.Count)
+            return false;
+        if (string.IsNullOrEmpty(newCardId))
+            return false;
+
+        oldCardId = handCardIds[handIndex];
+        if (string.IsNullOrEmpty(oldCardId))
+            return false;
+
+        bool isSameCardTransform = oldCardId == newCardId;
+        if (!isSameCardTransform)
+        {
+            handCardIds[handIndex] = newCardId;
+        }
+
+        RemoveCardFromOwned(oldCardId);
+        AddCardToOwned(newCardId);
+        UpdateHandCount();
+
+        if (isSameCardTransform && connectionToClient != null)
+        {
+            TargetPlayHandTransformFx(connectionToClient, handIndex, oldCardId, newCardId);
+        }
+
+        return true;
+    }
+
+    [Server]
+    public bool DiscardHandCardByIndex(int handIndex, out string cardId)
+    {
+        cardId = "";
+
+        if (handIndex < 0 || handIndex >= handCardIds.Count)
+            return false;
+
+        cardId = handCardIds[handIndex];
+        if (string.IsNullOrEmpty(cardId))
+            return false;
+
+        handCardIds.RemoveAt(handIndex);
+        discardPile.Add(cardId);
+        UpdateHandCount();
+        return true;
+    }
+
+    [Server]
+    public CardEffectResult BanishHandCardByIndex(int handIndex, out string cardId)
+    {
+        cardId = "";
+
+        if (handIndex < 0 || handIndex >= handCardIds.Count)
+            return CardEffectResult.Failed;
+
+        cardId = handCardIds[handIndex];
+        if (string.IsNullOrEmpty(cardId))
+            return CardEffectResult.Failed;
+
+        handCardIds.RemoveAt(handIndex);
+        UpdateHandCount();
+
+        return AddCardToBanish(cardId);
+    }
+
+    [Server]
+    public int GetLastHandCardIndex(string cardId)
+    {
+        if (string.IsNullOrEmpty(cardId))
+            return -1;
+
+        for (int i = handCardIds.Count - 1; i >= 0; i--)
+        {
+            if (handCardIds[i] == cardId)
+                return i;
+        }
+
+        return -1;
+    }
+
+    [Server]
+    public CardEffectResult MoveDiscardCardToHandByIndex(int discardIndex, out string cardId)
+    {
+        cardId = "";
+
+        if (discardIndex < 0 || discardIndex >= discardPile.Count)
+            return CardEffectResult.Failed;
+
+        cardId = discardPile[discardIndex];
+        if (string.IsNullOrEmpty(cardId))
+            return CardEffectResult.Failed;
+
+        discardPile.RemoveAt(discardIndex);
+        return EnterHandCard(cardId, true, false); 
+    }
+
+    [Server]
+    public CardEffectResult BanishDiscardPileCardByIndex(int discardIndex, out string cardId)
+    {
+        cardId = "";
+
+        if (discardIndex < 0 || discardIndex >= discardPile.Count)
+            return CardEffectResult.Failed;
+
+        cardId = discardPile[discardIndex];
+        if (string.IsNullOrEmpty(cardId))
+            return CardEffectResult.Failed;
+
+        discardPile.RemoveAt(discardIndex);
+        return AddCardToBanish(cardId);
+    }
+
+    [Server]
     private void UpdateHandCount()
     {
         handCount = handCardIds.Count;
+    }
+
+    [Server]
+    private CardEffectResult EnterHandCard(string cardId, bool fromDiscardPile, bool fromDrawPile)
+    {
+        if (string.IsNullOrEmpty(cardId))
+            return CardEffectResult.Failed;
+
+        handCardIds.Add(cardId);
+        UpdateHandCount();
+
+        CardEffectResult effectResult = ResolveHandEnterEffect(cardId);
+        if (effectResult == CardEffectResult.Failed)
+            return CardEffectResult.Failed;
+
+        CardEffectResult drawEnterEffectResult = CardEffectResult.Applied;
+        if (fromDrawPile)
+        {
+            drawEnterEffectResult = ResolveHandEnterFromDrawEffect(cardId);
+            if (drawEnterEffectResult == CardEffectResult.Failed)
+                return CardEffectResult.Failed;
+        }
+
+        CardEffectResult discardEnterEffectResult = CardEffectResult.Applied;
+        if (fromDiscardPile)
+        {
+            discardEnterEffectResult = ResolveHandEnterFromDiscardEffect(cardId);
+            if (discardEnterEffectResult == CardEffectResult.Failed)
+                return CardEffectResult.Failed;
+        }
+
+        if (effectResult == CardEffectResult.Pending ||
+            drawEnterEffectResult == CardEffectResult.Pending ||
+            discardEnterEffectResult == CardEffectResult.Pending)
+            return CardEffectResult.Pending;
+
+        return CardEffectResult.Applied;
+    }
+
+    [Server]
+    private CardEffectResult ResolveHandEnterEffect(string cardId)
+    {
+        if (string.IsNullOrEmpty(cardId))
+            return CardEffectResult.Failed;
+        if (CardEffectManager.Instance == null)
+            return CardEffectResult.Applied;
+
+        CardEffectResult effectResult = CardEffectManager.Instance.ResolveHandEnterEffect(playerIndex, cardId);
+        if (effectResult == CardEffectResult.Failed)
+        {
+            Debug.LogWarning($"Failed to resolve hand enter effect for card {cardId}.");
+        }
+
+        return effectResult;
+    }
+
+    [Server]
+    private CardEffectResult ResolveHandEnterFromDrawEffect(string cardId)
+    {
+        if (string.IsNullOrEmpty(cardId))
+            return CardEffectResult.Failed;
+        if (CardEffectManager.Instance == null)
+            return CardEffectResult.Applied;
+
+        CardEffectResult effectResult = CardEffectManager.Instance.ResolveHandEnterFromDrawEffect(playerIndex, cardId);
+        if (effectResult == CardEffectResult.Failed)
+        {
+            Debug.LogWarning($"Failed to resolve draw-to-hand enter effect for card {cardId}.");
+        }
+
+        return effectResult;
+    }
+
+    [Server]
+    private CardEffectResult ResolveHandEnterFromDiscardEffect(string cardId)
+    {
+        if (string.IsNullOrEmpty(cardId))
+            return CardEffectResult.Failed;
+        if (CardEffectManager.Instance == null)
+            return CardEffectResult.Applied;
+
+        CardEffectResult effectResult = CardEffectManager.Instance.ResolveHandEnterFromDiscardEffect(playerIndex, cardId);
+        if (effectResult == CardEffectResult.Failed)
+        {
+            Debug.LogWarning($"Failed to resolve discard-to-hand enter effect for card {cardId}.");
+        }
+
+        return effectResult;
     }
 
     #region 装备激活
@@ -752,6 +1258,32 @@ public class PlayerState : NetworkBehaviour
         );
     }
 
+    [Server]
+    public void BeginPlayerSelection(
+    PendingSelectionType selectionType,
+    string title,
+    int minCount,
+    int maxCount,
+    List<int> optionPlayerIndices,
+    List<int> optionPayloads)
+    {
+        pendingSelectionType = selectionType;
+        pendingMinSelectCount = minCount;
+        pendingMaxSelectCount = maxCount;
+
+        pendingSelectionPayloads.Clear();
+        pendingSelectionPayloads.AddRange(optionPayloads);
+
+        TargetOpenPlayerSelection(
+            connectionToClient,
+            title,
+            minCount,
+            maxCount,
+            optionPlayerIndices.ToArray(),
+            optionPayloads.ToArray()
+        );
+    }
+
     [TargetRpc]
     private void TargetOpenSelection(
     NetworkConnectionToClient target,
@@ -765,8 +1297,6 @@ public class PlayerState : NetworkBehaviour
             return;
 
         localSelectionPayloads.Clear();
-        localSelectionPayloads.AddRange(optionPayloads);
-
         List<Sprite> optionSprites = new List<Sprite>();
 
         for (int i = 0; i < optionCardIds.Length; i++)
@@ -774,12 +1304,15 @@ public class PlayerState : NetworkBehaviour
             string cardId = optionCardIds[i];
             if (string.IsNullOrEmpty(cardId))
                 continue;
+            if (i < 0 || i >= optionPayloads.Length)
+                continue;
 
             CardData cardData = CardDatabase.Instance.GetCardById(cardId);
             if (cardData == null || cardData.cardSprite == null)
                 continue;
 
             optionSprites.Add(cardData.cardSprite);
+            localSelectionPayloads.Add(optionPayloads[i]);
         }
 
         if (optionSprites.Count == 0)
@@ -788,6 +1321,44 @@ public class PlayerState : NetworkBehaviour
         SelectionUI.Instance.ShowSelection(
             title,
             optionSprites,
+            minCount,
+            maxCount,
+            OnSelectionConfirmed
+        );
+    }
+
+    [TargetRpc]
+    private void TargetOpenPlayerSelection(
+    NetworkConnectionToClient target,
+    string title,
+    int minCount,
+    int maxCount,
+    int[] optionPlayerIndices,
+    int[] optionPayloads)
+    {
+        if (SelectionUI.Instance == null || MatchManager.Instance == null)
+            return;
+
+        localSelectionPayloads.Clear();
+        List<PlayerState> optionPlayers = new List<PlayerState>();
+
+        for (int i = 0; i < optionPlayerIndices.Length; i++)
+        {
+            if (i < 0 || i >= optionPayloads.Length)
+                continue;
+            if (!TryGetClientPlayerByIndex(optionPlayerIndices[i], out PlayerState optionPlayer))
+                continue;
+
+            optionPlayers.Add(optionPlayer);
+            localSelectionPayloads.Add(optionPayloads[i]);
+        }
+
+        if (optionPlayers.Count == 0)
+            return;
+
+        SelectionUI.Instance.ShowPlayerSelection(
+            title,
+            optionPlayers,
             minCount,
             maxCount,
             OnSelectionConfirmed
@@ -814,6 +1385,28 @@ public class PlayerState : NetworkBehaviour
         CmdSubmitSelection(selectedPayloads.ToArray());
     }
 
+    private bool TryGetClientPlayerByIndex(int targetPlayerIndex, out PlayerState player)
+    {
+        player = null;
+
+        if (MatchManager.Instance == null)
+            return false;
+
+        for (int i = 0; i < MatchManager.Instance.playerList.Count; i++)
+        {
+            PlayerState candidate = MatchManager.Instance.playerList[i];
+            if (candidate == null)
+                continue;
+            if (candidate.playerIndex != targetPlayerIndex)
+                continue;
+
+            player = candidate;
+            return true;
+        }
+
+        return false;
+    }
+
     // 服务器会根据开启选择时记录的映射来解析玩家选中的负载。
     [Command]
     private void CmdSubmitSelection(int[] selectedPayloads)
@@ -828,6 +1421,8 @@ public class PlayerState : NetworkBehaviour
             return;
 
         bool selectionResolvedSuccessfully = false;
+        // 某些卡牌会在选择完成后追加第二段公共演出，例如术士的放逐动画。
+        PresentationEvent? followUpPresentationEvent = null;
 
         switch (pendingSelectionType)
         {
@@ -841,8 +1436,8 @@ public class PlayerState : NetworkBehaviour
                     if (slotIndex < 0 || slotIndex >= ShopState.Instance.centerCardIds.Count)
                         return;
 
-                    string cardId = ShopState.Instance.centerCardIds[slotIndex];
-                    if (string.IsNullOrEmpty(cardId))
+                    string removedCardId = ShopState.Instance.centerCardIds[slotIndex];
+                    if (string.IsNullOrEmpty(removedCardId))
                         return;
 
                     ShopState.Instance.DiscardCenterCard(slotIndex);
@@ -853,6 +1448,206 @@ public class PlayerState : NetworkBehaviour
                         isWizard = true;
                     }
 
+                    followUpPresentationEvent = PresentationEvent.CreateRemoveCards(
+                        playerIndex,
+                        PresentationStyle.FireDissolve,
+                        WrapCardId(pendingPublicCardId),
+                        new[] { removedCardId },
+                        $"{playerName} triggered a banish presentation for {removedCardId}"
+                    );
+
+                    selectionResolvedSuccessfully = true;
+                    break;
+                }
+
+            case PendingSelectionType.BanishOneHandCard:
+                {
+                    int handIndex = selectedPayloads[0];
+                    if (!pendingSelectionPayloads.Contains(handIndex))
+                        return;
+
+                    CardEffectResult banishEffectResult = BanishHandCardByIndex(handIndex, out string banishedCardId);
+                    if (banishEffectResult == CardEffectResult.Failed)
+                        return;
+
+                    followUpPresentationEvent = PresentationEvent.CreateRemoveCards(
+                        playerIndex,
+                        PresentationStyle.FireDissolve,
+                        WrapCardId(pendingPublicCardId),
+                        new[] { banishedCardId },
+                        $"{playerName} triggered a banish presentation for {banishedCardId}"
+                    );
+
+                    selectionResolvedSuccessfully = true;
+                    break;
+                }
+
+            case PendingSelectionType.BanishOneDiscardPileCard:
+                {
+                    int discardIndex = selectedPayloads[0];
+                    if (!pendingSelectionPayloads.Contains(discardIndex))
+                        return;
+
+                    CardEffectResult banishEffectResult = BanishDiscardPileCardByIndex(discardIndex, out string banishedCardId);
+                    if (banishEffectResult == CardEffectResult.Failed)
+                        return;
+
+                    followUpPresentationEvent = PresentationEvent.CreateRemoveCards(
+                        playerIndex,
+                        PresentationStyle.FireDissolve,
+                        WrapCardId(pendingPublicCardId),
+                        new[] { banishedCardId },
+                        $"{playerName} triggered a banish presentation for {banishedCardId}"
+                    );
+
+                    selectionResolvedSuccessfully = true;
+                    break;
+                }
+
+            case PendingSelectionType.RhinePreviewTopThree:
+                {
+                    int selectedDrawIndex = selectedPayloads[0];
+                    if (!pendingSelectionPayloads.Contains(selectedDrawIndex))
+                        return;
+                    if (CardDatabase.Instance == null)
+                        return;
+
+                    List<int> previewIndices = new List<int>();
+                    List<string> previewCardIds = new List<string>();
+
+                    for (int i = 0; i < pendingSelectionPayloads.Count; i++)
+                    {
+                        int drawIndex = pendingSelectionPayloads[i];
+                        if (drawIndex < 0 || drawIndex >= drawPile.Count)
+                            return;
+
+                        string previewCardId = drawPile[drawIndex];
+                        if (string.IsNullOrEmpty(previewCardId))
+                            return;
+
+                        previewIndices.Add(drawIndex);
+                        previewCardIds.Add(previewCardId);
+                    }
+
+                    for (int i = previewIndices.Count - 1; i >= 0; i--)
+                    {
+                        int drawIndex = previewIndices[i];
+                        if (drawIndex < 0 || drawIndex >= drawPile.Count)
+                            return;
+
+                        drawPile.RemoveAt(drawIndex);
+                    }
+
+                    for (int i = 0; i < previewCardIds.Count; i++)
+                    {
+                        int originalDrawIndex = previewIndices[i];
+                        string previewCardId = previewCardIds[i];
+
+                        bool shouldEnterHand = originalDrawIndex == selectedDrawIndex;
+                        if (!shouldEnterHand)
+                        {
+                            CardData previewCardData = CardDatabase.Instance.GetCardById(previewCardId);
+                            shouldEnterHand = previewCardData != null && previewCardData.cardCategory == CardCategory.Rhine;
+                        }
+
+                        if (shouldEnterHand)
+                        {
+                            CardEffectResult enterResult = EnterHandCard(previewCardId, false, false);
+                            if (enterResult == CardEffectResult.Failed)
+                                return;
+                        }
+                        else
+                        {
+                            discardPile.Add(previewCardId);
+                        }
+                    }
+
+                    selectionResolvedSuccessfully = true;
+                    break;
+                }
+
+            case PendingSelectionType.UpgradeOneBasicHandCard:
+                {
+                    int handIndex = selectedPayloads[0];
+                    if (!pendingSelectionPayloads.Contains(handIndex))
+                        return;
+                    if (CardEffectManager.Instance == null)
+                        return;
+                    if (handIndex < 0 || handIndex >= handCardIds.Count)
+                        return;
+
+                    string sourceCardId = handCardIds[handIndex];
+                    if (!CardEffectManager.Instance.TryGetRandomBasicUpgradeCardId(sourceCardId, out string upgradedCardId))
+                        return;
+                    if (!TransformHandCardByIndex(handIndex, upgradedCardId, out _))
+                        return;
+
+                    selectionResolvedSuccessfully = true;
+                    break;
+                }
+
+            case PendingSelectionType.TransformOneHandCardSameCost:
+                {
+                    int handIndex = selectedPayloads[0];
+                    if (!pendingSelectionPayloads.Contains(handIndex))
+                        return;
+                    if (CardEffectManager.Instance == null || CardDatabase.Instance == null)
+                        return;
+                    if (handIndex < 0 || handIndex >= handCardIds.Count)
+                        return;
+
+                    string sourceCardId = handCardIds[handIndex];
+                    CardData sourceCardData = CardDatabase.Instance.GetCardById(sourceCardId);
+                    if (sourceCardData == null)
+                        return;
+                    if (!CardEffectManager.Instance.TryGetRandomTransformCardId(sourceCardId, sourceCardData.cost, false, out string transformedCardId))
+                        return;
+                    if (!TransformHandCardByIndex(handIndex, transformedCardId, out _))
+                        return;
+
+                    selectionResolvedSuccessfully = true;
+                    break;
+                }
+
+            case PendingSelectionType.TransformOneHandCardByMana:
+                {
+                    int handIndex = selectedPayloads[0];
+                    if (!pendingSelectionPayloads.Contains(handIndex))
+                        return;
+                    if (CardEffectManager.Instance == null || CardDatabase.Instance == null)
+                        return;
+                    if (handIndex < 0 || handIndex >= handCardIds.Count)
+                        return;
+
+                    string sourceCardId = handCardIds[handIndex];
+                    CardData sourceCardData = CardDatabase.Instance.GetCardById(sourceCardId);
+                    if (sourceCardData == null)
+                        return;
+
+                    int manaToSpend = Mathf.Max(0, mana);
+                    if (!CardEffectManager.Instance.TryGetRandomTransformCardId(sourceCardId, sourceCardData.cost + manaToSpend, true, out string transformedCardId))
+                        return;
+                    if (!SpendMana(manaToSpend))
+                        return;
+                    if (!TransformHandCardByIndex(handIndex, transformedCardId, out _))
+                        return;
+
+                    selectionResolvedSuccessfully = true;
+                    break;
+                }
+
+            case PendingSelectionType.DorothyChooseOnePlayer:
+                {
+                    int targetPlayerIndex = selectedPayloads[0];
+                    if (!pendingSelectionPayloads.Contains(targetPlayerIndex))
+                        return;
+                    if (CardEffectManager.Instance == null)
+                        return;
+                    if (!TryGetClientPlayerByIndex(targetPlayerIndex, out PlayerState targetPlayer))
+                        return;
+                    if (!CardEffectManager.Instance.TryAddDerivedCardsToPlayerDeck(targetPlayer, pendingPublicCardId, 2))
+                        return;
+
                     selectionResolvedSuccessfully = true;
                     break;
                 }
@@ -861,6 +1656,11 @@ public class PlayerState : NetworkBehaviour
         if (selectionResolvedSuccessfully && hasPendingPublicAction && MatchManager.Instance != null)
         {
             BroadcastPublicAction(pendingPublicCardId, pendingPublicActionType);
+        }
+
+        if (selectionResolvedSuccessfully && followUpPresentationEvent.HasValue && MatchManager.Instance != null)
+        {
+            BroadcastPresentationEvent(followUpPresentationEvent.Value);
         }
 
         // 服务器完成本次选择结算后，重置选择状态。
@@ -902,7 +1702,14 @@ public class PlayerState : NetworkBehaviour
 public enum PendingSelectionType
 {
     None,
-    WizardDiscardOneCenterCard    // 供卡牌 00004 使用，用于选择一张中央卡牌并将其放逐。
+    RhinePreviewTopThree,
+    UpgradeOneBasicHandCard,
+    TransformOneHandCardSameCost,
+    TransformOneHandCardByMana,
+    DorothyChooseOnePlayer,
+    BanishOneDiscardPileCard,
+    BanishOneHandCard,            // 选择手牌放逐
+    WizardDiscardOneCenterCard    // 供卡牌 00005 使用，用于选择一张中央卡牌并将其放逐。
 }
 
 

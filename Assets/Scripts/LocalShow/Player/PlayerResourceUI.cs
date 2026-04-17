@@ -22,7 +22,7 @@ public class PlayerResourceUI : MonoBehaviour
 
         if (localPlayer != null)
         {
-            SetData(localPlayer.attack, localPlayer.mana, localPlayer.score);
+            SetData(localPlayer.attack, localPlayer.mana, localPlayer.GetDisplayedScore());
         }
     }
     #endregion

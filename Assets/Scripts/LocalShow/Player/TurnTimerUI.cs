@@ -5,25 +5,45 @@ using UnityEngine;
 public class TurnTimerUI : MonoBehaviour
 {
     [SerializeField] private TMP_Text timerText;
+    [SerializeField] private TMP_Text turnCountText;
 
     private void Update()
     {
-        if (timerText == null)
+        MatchManager matchManager = MatchManager.Instance;
+
+        if (timerText == null && turnCountText == null)
             return;
 
-        if (MatchManager.Instance == null || !MatchManager.Instance.gameStarted)
+        if (matchManager == null || !matchManager.gameStarted)
         {
-            timerText.text = "";
+            if (timerText != null)
+            {
+                timerText.text = "";
+            }
+
+            if (turnCountText != null)
+            {
+                turnCountText.text = "";
+            }
+
             return;
         }
 
-        if (MatchManager.Instance.waitingForPublicActionDrain)
+        if (turnCountText != null)
+        {
+            turnCountText.text = $"回合{matchManager.turnCount}";
+        }
+
+        if (timerText == null)
+            return;
+
+        if (matchManager.waitingForPublicActionDrain)
         {
             timerText.text = "--";
             return;
         }
 
-        double remain = MatchManager.Instance.currentTurnEndTime - NetworkTime.time;
+        double remain = matchManager.currentTurnEndTime - NetworkTime.time;
         remain = Mathf.Max(0f, (float)remain);
 
         timerText.text = Mathf.CeilToInt((float)remain).ToString();

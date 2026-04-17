@@ -62,7 +62,6 @@ public class ShopSlotUI : MonoBehaviour, IPointerClickHandler
         if (card == null) return;
         if (panel == null) return;
 
-        Debug.Log("Shop slot clicked: " + slotIndex);
         panel.OnSlotClicked(this);
     }
     #endregion

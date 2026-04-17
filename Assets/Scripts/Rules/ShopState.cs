@@ -18,8 +18,9 @@ public class ShopState : NetworkBehaviour
         "00003",
         "00004",
         "00005",
-        "00000",
-        ""
+        "00006",
+        "00007",
+        "00000"
     };
     #endregion
 
@@ -114,6 +115,7 @@ public class ShopState : NetworkBehaviour
             }
 
             centerCardIds[i] = newCardId;
+            ResolveCenterEnterEffect(newCardId, i);
         }
     }
 
@@ -160,6 +162,31 @@ public class ShopState : NetworkBehaviour
         discardPile.Add(cardId);
         centerCardIds[slotIndex] = "";
         FillCenterCards();
+    }
+
+    [Server]
+    private void ResolveCenterEnterEffect(string cardId, int slotIndex)
+    {
+        if (string.IsNullOrEmpty(cardId))
+            return;
+        if (CardEffectManager.Instance == null)
+            return;
+
+        int playerIndex = -1;
+        if (MatchManager.Instance != null)
+        {
+            PlayerState currentPlayer = MatchManager.Instance.GetCurrentPlayer();
+            if (currentPlayer != null)
+            {
+                playerIndex = currentPlayer.playerIndex;
+            }
+        }
+
+        CardEffectResult effectResult = CardEffectManager.Instance.ResolveCenterEnterEffect(playerIndex, cardId, slotIndex);
+        if (effectResult == CardEffectResult.Failed)
+        {
+            Debug.LogWarning($"Failed to resolve center enter effect for card {cardId} in slot {slotIndex}.");
+        }
     }
     #endregion
 }

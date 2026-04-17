@@ -36,7 +36,7 @@ public class EquipmentCardUI : MonoBehaviour
 
         if (typeText != null)
         {
-            typeText.text = isWeapon ? "Weapon" : "Equipment";
+            typeText.text = isWeapon ? "Weapon" : "Field";
         }
 
         SetUsed(isUsed);

@@ -33,7 +33,7 @@ public class HandCardUI : MonoBehaviour,
 
     #region 悬停状态
     [Header("悬停设置")]
-    public float hoverHeight = 120f;
+    public float hoverHeight = 180f;
     public float hoverScale = 1.2f;
     #endregion
 
@@ -41,7 +41,7 @@ public class HandCardUI : MonoBehaviour,
     [Header("拖拽设置")]
     public float dragScale = 1.2f;
     public bool resetRotationWhenDragging = true;
-    public float playThresholdY = 200f;
+    public float playThresholdY = 300f;
     #endregion
 
     #region 运行时状态

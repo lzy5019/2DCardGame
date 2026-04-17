@@ -106,8 +106,8 @@ public class PileCountUI : MonoBehaviour
 
         if (localPlayer != null)
         {
-            discardCount = localPlayer.discardPile.Count;
-            drawCount = localPlayer.drawPile.Count;
+            discardCount = localPlayer.GetDisplayedDiscardPileCount();
+            drawCount = localPlayer.GetDisplayedDrawPileCount();
             playedCount = localPlayer.playedCardIds.Count;
         }
 

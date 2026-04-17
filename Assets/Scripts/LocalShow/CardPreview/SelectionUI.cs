@@ -8,6 +8,13 @@ public class SelectionUI : MonoBehaviour
 {
     public static SelectionUI Instance;
 
+    private enum SelectionDisplayMode
+    {
+        None,
+        Card,
+        Player
+    }
+
     #region 界面引用
     [Header("核心引用")]
     public GameObject background;
@@ -15,13 +22,17 @@ public class SelectionUI : MonoBehaviour
     public TMP_Text titleText;
     public Button confirmButton;
     public GameObject selectionPanel;
+    public GameObject cardSelectionPanel;
+    public GameObject playerSelectionPanel;
 
     [Header("滚动视图")]
     public ScrollRect scrollView;
     public Transform contentRoot;
+    public Transform playerContentRoot;
 
     [Header("选项预制体")]
     public GameObject selectionCardPrefab;
+    public GameObject selectionPlayerPrefab;
     #endregion
 
     #region 状态
@@ -30,11 +41,13 @@ public class SelectionUI : MonoBehaviour
 
     private readonly List<int> selectedIndexes = new List<int>();
     private readonly List<SelectionCardUI> spawnedOptions = new List<SelectionCardUI>();
+    private readonly List<SelectionPlayerItemUI> spawnedPlayerOptions = new List<SelectionPlayerItemUI>();
 
     private int minSelectCount = 1;
     private int maxSelectCount = 1;
     private bool isBackgroundVisible = true;
     private Action<List<int>> onConfirmSelection;
+    private SelectionDisplayMode currentDisplayMode = SelectionDisplayMode.None;
     #endregion
 
     #region 属性
@@ -114,40 +127,28 @@ public class SelectionUI : MonoBehaviour
             return;
         }
 
-        if (titleText != null)
-        {
-            titleText.text = title;
-        }
-
-        minSelectCount = Mathf.Max(0, minCount);
-        maxSelectCount = Mathf.Max(minSelectCount, maxCount);
-
-        if (maxSelectCount > optionSprites.Count)
-        {
-            maxSelectCount = optionSprites.Count;
-        }
-
-        if (minSelectCount > maxSelectCount)
-        {
-            minSelectCount = maxSelectCount;
-        }
-
-        onConfirmSelection = onConfirm;
-
-        selectedIndexes.Clear();
-        ClearOptions();
-        BuildOptions(optionSprites);
-
-        isSelecting = true;
-
-        if (selectionPanel != null)
-        {
-            selectionPanel.SetActive(true);
-        }
-
-        SetBackgroundVisible(true);
+        PrepareSelection(title, minCount, maxCount, optionSprites.Count, onConfirm, SelectionDisplayMode.Card);
+        ClearPlayerOptions();
+        ClearCardOptions();
+        BuildCardOptions(optionSprites);
+        SetPanelState(SelectionDisplayMode.Card);
         RefreshOptionVisuals();
-        RefreshConfirmButton();
+    }
+
+    public void ShowPlayerSelection(string title, List<PlayerState> optionPlayers, int minCount, int maxCount, Action<List<int>> onConfirm)
+    {
+        if (optionPlayers == null || optionPlayers.Count == 0)
+        {
+            Debug.LogWarning("SelectionUI: optionPlayers is empty. The player selection panel cannot be opened.");
+            return;
+        }
+
+        PrepareSelection(title, minCount, maxCount, optionPlayers.Count, onConfirm, SelectionDisplayMode.Player);
+        ClearCardOptions();
+        ClearPlayerOptions();
+        BuildPlayerOptions(optionPlayers);
+        SetPanelState(SelectionDisplayMode.Player);
+        RefreshOptionVisuals();
     }
 
     public void CloseSelection()
@@ -155,12 +156,24 @@ public class SelectionUI : MonoBehaviour
         isSelecting = false;
         selectedIndexes.Clear();
         onConfirmSelection = null;
+        currentDisplayMode = SelectionDisplayMode.None;
 
-        ClearOptions();
+        ClearCardOptions();
+        ClearPlayerOptions();
 
         if (selectionPanel != null)
         {
             selectionPanel.SetActive(false);
+        }
+
+        if (cardSelectionPanel != null)
+        {
+            cardSelectionPanel.SetActive(false);
+        }
+
+        if (playerSelectionPanel != null)
+        {
+            playerSelectionPanel.SetActive(false);
         }
 
         SetBackgroundVisible(true);
@@ -236,6 +249,19 @@ public class SelectionUI : MonoBehaviour
         {
             background.SetActive(visible);
         }
+
+        bool showCardPanel = visible && currentDisplayMode == SelectionDisplayMode.Card;
+        bool showPlayerPanel = visible && currentDisplayMode == SelectionDisplayMode.Player;
+
+        if (cardSelectionPanel != null)
+        {
+            cardSelectionPanel.SetActive(showCardPanel);
+        }
+
+        if (playerSelectionPanel != null)
+        {
+            playerSelectionPanel.SetActive(showPlayerPanel);
+        }
     }
 
     private void RefreshConfirmButton()
@@ -249,7 +275,7 @@ public class SelectionUI : MonoBehaviour
         confirmButton.interactable = isSelecting && canConfirm;
     }
 
-    private void BuildOptions(List<Sprite> optionSprites)
+    private void BuildCardOptions(List<Sprite> optionSprites)
     {
         if (selectionCardPrefab == null || contentRoot == null)
         {
@@ -274,7 +300,33 @@ public class SelectionUI : MonoBehaviour
         }
     }
 
-    private void ClearOptions()
+    private void BuildPlayerOptions(List<PlayerState> optionPlayers)
+    {
+        if (selectionPlayerPrefab == null || playerContentRoot == null)
+        {
+            Debug.LogWarning("SelectionUI: selectionPlayerPrefab or playerContentRoot is not assigned.");
+            return;
+        }
+
+        for (int i = 0; i < optionPlayers.Count; i++)
+        {
+            PlayerState targetPlayer = optionPlayers[i];
+            if (targetPlayer == null)
+                continue;
+
+            GameObject optionObj = Instantiate(selectionPlayerPrefab, playerContentRoot);
+            SelectionPlayerItemUI playerItemUI = optionObj.GetComponent<SelectionPlayerItemUI>();
+            if (playerItemUI == null)
+            {
+                playerItemUI = optionObj.AddComponent<SelectionPlayerItemUI>();
+            }
+
+            playerItemUI.Setup(targetPlayer, i, OnOptionClicked);
+            spawnedPlayerOptions.Add(playerItemUI);
+        }
+    }
+
+    private void ClearCardOptions()
     {
         for (int i = 0; i < spawnedOptions.Count; i++)
         {
@@ -287,8 +339,35 @@ public class SelectionUI : MonoBehaviour
         spawnedOptions.Clear();
     }
 
+    private void ClearPlayerOptions()
+    {
+        for (int i = 0; i < spawnedPlayerOptions.Count; i++)
+        {
+            if (spawnedPlayerOptions[i] != null)
+            {
+                Destroy(spawnedPlayerOptions[i].gameObject);
+            }
+        }
+
+        spawnedPlayerOptions.Clear();
+    }
+
     private void RefreshOptionVisuals()
     {
+        if (currentDisplayMode == SelectionDisplayMode.Player)
+        {
+            for (int i = 0; i < spawnedPlayerOptions.Count; i++)
+            {
+                if (spawnedPlayerOptions[i] == null)
+                    continue;
+
+                bool isSelected = selectedIndexes.Contains(i);
+                spawnedPlayerOptions[i].SetSelected(isSelected);
+            }
+
+            return;
+        }
+
         for (int i = 0; i < spawnedOptions.Count; i++)
         {
             if (spawnedOptions[i] == null)
@@ -299,5 +378,45 @@ public class SelectionUI : MonoBehaviour
         }
     }
     #endregion
+
+    private void PrepareSelection(string title, int minCount, int maxCount, int optionCount, Action<List<int>> onConfirm, SelectionDisplayMode displayMode)
+    {
+        if (titleText != null)
+        {
+            titleText.text = title;
+        }
+
+        minSelectCount = Mathf.Max(0, minCount);
+        maxSelectCount = Mathf.Max(minSelectCount, maxCount);
+
+        if (maxSelectCount > optionCount)
+        {
+            maxSelectCount = optionCount;
+        }
+
+        if (minSelectCount > maxSelectCount)
+        {
+            minSelectCount = maxSelectCount;
+        }
+
+        onConfirmSelection = onConfirm;
+        currentDisplayMode = displayMode;
+
+        selectedIndexes.Clear();
+        isSelecting = true;
+
+        SetBackgroundVisible(true);
+        RefreshConfirmButton();
+    }
+
+    private void SetPanelState(SelectionDisplayMode displayMode)
+    {
+        if (selectionPanel != null)
+        {
+            selectionPanel.SetActive(displayMode != SelectionDisplayMode.None);
+        }
+
+        SetBackgroundVisible(isBackgroundVisible);
+    }
 }
 

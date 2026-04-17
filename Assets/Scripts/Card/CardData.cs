@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using System.Collections.Generic;
+using UnityEngine;
 
 [CreateAssetMenu(fileName = "NewCardData", menuName = "Card Game/Card Data")]
 public class CardData : ScriptableObject
@@ -28,14 +29,19 @@ public class CardData : ScriptableObject
     #region 表现信息
     [Header("表现信息")]
     public Sprite cardSprite;
+    public AudioClip playWav;
+    public AudioClip buyWav;
 
     [TextArea(2, 5)]
     public string description;
+
+    [Header("衍生卡")]
+    public List<CardData> derivedCards = new List<CardData>();
     #endregion
 
     #region 效果信息
     [Header("效果信息")]
-    public string effectId;
+    public List<int> effectId;
     #endregion
 }
 
