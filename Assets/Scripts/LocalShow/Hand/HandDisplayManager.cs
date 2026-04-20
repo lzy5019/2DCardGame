@@ -27,9 +27,12 @@ public class HandDisplayManager : MonoBehaviour
     private readonly List<GameObject> cardObjects = new List<GameObject>();
     private readonly List<PendingIncomingVisualEvent> pendingIncomingVisualEvents = new List<PendingIncomingVisualEvent>();
     private readonly List<PendingDrawCardView> pendingDrawCardViews = new List<PendingDrawCardView>();
+    private readonly List<PendingIncomingHandExileEvent> pendingIncomingHandExileEvents = new List<PendingIncomingHandExileEvent>();
+    private readonly List<PendingRemovedHandView> pendingRemovedHandViews = new List<PendingRemovedHandView>();
     #endregion
 
     private const float PendingDrawFxMatchTimeout = 12f;
+    private const float PendingHandExileMatchTimeout = 0.5f;
 
     private sealed class PendingIncomingVisualEvent
     {
@@ -42,6 +45,21 @@ public class HandDisplayManager : MonoBehaviour
 
     private sealed class PendingDrawCardView
     {
+        public GameObject cardObject;
+        public float expireTime;
+    }
+
+    private sealed class PendingIncomingHandExileEvent
+    {
+        public int handIndex;
+        public string cardId;
+        public float expireTime;
+    }
+
+    private sealed class PendingRemovedHandView
+    {
+        public int handIndex;
+        public string cardId;
         public GameObject cardObject;
         public float expireTime;
     }
@@ -67,6 +85,18 @@ public class HandDisplayManager : MonoBehaviour
         }
 
         UnregisterCurrentPlayer();
+    }
+
+    private void Update()
+    {
+        if (pendingIncomingVisualEvents.Count > 0 ||
+            pendingDrawCardViews.Count > 0 ||
+            pendingIncomingHandExileEvents.Count > 0 ||
+            pendingRemovedHandViews.Count > 0)
+        {
+            CleanupPendingDrawFxState();
+            TryProcessPendingHandExileFx();
+        }
     }
     #endregion
 
@@ -97,6 +127,18 @@ public class HandDisplayManager : MonoBehaviour
 
         pendingIncomingVisualEvents.Clear();
         pendingDrawCardViews.Clear();
+        pendingIncomingHandExileEvents.Clear();
+
+        for (int i = 0; i < pendingRemovedHandViews.Count; i++)
+        {
+            PendingRemovedHandView removedView = pendingRemovedHandViews[i];
+            if (removedView != null && removedView.cardObject != null)
+            {
+                Destroy(removedView.cardObject);
+            }
+        }
+
+        pendingRemovedHandViews.Clear();
         ClearHand();
     }
 
@@ -111,7 +153,7 @@ public class HandDisplayManager : MonoBehaviour
             case SyncList<string>.Operation.OP_REMOVEAT:
                 if (index >= 0 && index < cardObjects.Count)
                 {
-                    RearrangeAfterPlay(index);
+                    HandleCardRemoved(index, item);
                 }
                 else
                 {
@@ -184,7 +226,26 @@ public class HandDisplayManager : MonoBehaviour
     public bool IsIncomingDrawFxBusy()
     {
         CleanupPendingDrawFxState();
-        return pendingIncomingVisualEvents.Count > 0 || pendingDrawCardViews.Count > 0 || HandCardDrawFxUI.IsBusy;
+        return pendingIncomingVisualEvents.Count > 0 ||
+               pendingDrawCardViews.Count > 0 ||
+               pendingIncomingHandExileEvents.Count > 0 ||
+               pendingRemovedHandViews.Count > 0 ||
+               HandCardDrawFxUI.IsBusy ||
+               HandCardExileFxUI.IsBusy;
+    }
+
+    public void NotifyIncomingHandExileFx(int handIndex, string cardId)
+    {
+        CleanupPendingDrawFxState();
+
+        pendingIncomingHandExileEvents.Add(new PendingIncomingHandExileEvent
+        {
+            handIndex = handIndex,
+            cardId = cardId,
+            expireTime = Time.unscaledTime + PendingHandExileMatchTimeout
+        });
+
+        TryProcessPendingHandExileFx();
     }
 
     public void RefreshHand()
@@ -406,9 +467,65 @@ public class HandDisplayManager : MonoBehaviour
         UpdateHandLayout();
     }
 
+    private void HandleCardRemoved(int handIndex, string removedCardId)
+    {
+        GameObject removedCardObj = cardObjects[handIndex];
+        string resolvedCardId = removedCardId;
+
+        HandCardUI removedCardUI = removedCardObj != null ? removedCardObj.GetComponent<HandCardUI>() : null;
+        if (string.IsNullOrEmpty(resolvedCardId) && removedCardUI != null)
+        {
+            resolvedCardId = removedCardUI.cardId;
+        }
+
+        cardObjects.RemoveAt(handIndex);
+
+        for (int i = 0; i < cardObjects.Count; i++)
+        {
+            if (cardObjects[i] == null)
+                continue;
+
+            cardObjects[i].name = "HandCard_" + i;
+
+            HandCardUI cardUI = cardObjects[i].GetComponent<HandCardUI>();
+            if (cardUI != null)
+            {
+                cardUI.handIndex = i;
+            }
+        }
+
+        if (removedCardObj != null)
+        {
+            pendingRemovedHandViews.Add(new PendingRemovedHandView
+            {
+                handIndex = handIndex,
+                cardId = resolvedCardId,
+                cardObject = removedCardObj,
+                expireTime = Time.unscaledTime + PendingHandExileMatchTimeout
+            });
+
+            ConcealCardImmediately(removedCardObj);
+        }
+
+        UpdateHandLayout();
+        TryProcessPendingHandExileFx();
+    }
+
     public void ClearHand()
     {
         pendingDrawCardViews.Clear();
+        pendingIncomingHandExileEvents.Clear();
+
+        for (int i = 0; i < pendingRemovedHandViews.Count; i++)
+        {
+            PendingRemovedHandView removedView = pendingRemovedHandViews[i];
+            if (removedView != null && removedView.cardObject != null)
+            {
+                Destroy(removedView.cardObject);
+            }
+        }
+
+        pendingRemovedHandViews.Clear();
 
         for (int i = 0; i < cardObjects.Count; i++)
         {
@@ -449,6 +566,31 @@ public class HandDisplayManager : MonoBehaviour
                 pendingIncomingVisualEvents.RemoveAt(i);
             }
         }
+
+        for (int i = pendingIncomingHandExileEvents.Count - 1; i >= 0; i--)
+        {
+            PendingIncomingHandExileEvent exileEvent = pendingIncomingHandExileEvents[i];
+            if (exileEvent == null || exileEvent.expireTime <= now)
+            {
+                pendingIncomingHandExileEvents.RemoveAt(i);
+            }
+        }
+
+        for (int i = pendingRemovedHandViews.Count - 1; i >= 0; i--)
+        {
+            PendingRemovedHandView removedView = pendingRemovedHandViews[i];
+            if (removedView == null || removedView.cardObject == null)
+            {
+                pendingRemovedHandViews.RemoveAt(i);
+                continue;
+            }
+
+            if (removedView.expireTime <= now)
+            {
+                Destroy(removedView.cardObject);
+                pendingRemovedHandViews.RemoveAt(i);
+            }
+        }
     }
 
     private void ResolveExpiredPendingVisualEvent(PendingIncomingVisualEvent visualEvent)
@@ -476,6 +618,70 @@ public class HandDisplayManager : MonoBehaviour
             cardObject = cardObj,
             expireTime = Time.unscaledTime + PendingDrawFxMatchTimeout
         });
+    }
+
+    private void TryProcessPendingHandExileFx()
+    {
+        while (pendingIncomingHandExileEvents.Count > 0)
+        {
+            PendingIncomingHandExileEvent exileEvent = pendingIncomingHandExileEvents[0];
+            if (exileEvent == null)
+            {
+                pendingIncomingHandExileEvents.RemoveAt(0);
+                continue;
+            }
+
+            if (!TryConsumePendingRemovedHandView(exileEvent.handIndex, exileEvent.cardId, out PendingRemovedHandView removedView))
+                return;
+
+            pendingIncomingHandExileEvents.RemoveAt(0);
+            StartQueuedHandExileFx(removedView.cardObject, string.IsNullOrEmpty(exileEvent.cardId) ? removedView.cardId : exileEvent.cardId);
+        }
+    }
+
+    private bool TryConsumePendingRemovedHandView(int handIndex, string cardId, out PendingRemovedHandView removedView)
+    {
+        removedView = null;
+
+        for (int i = 0; i < pendingRemovedHandViews.Count; i++)
+        {
+            PendingRemovedHandView candidate = pendingRemovedHandViews[i];
+            if (candidate == null || candidate.cardObject == null)
+            {
+                pendingRemovedHandViews.RemoveAt(i);
+                i--;
+                continue;
+            }
+
+            bool handIndexMatches = candidate.handIndex == handIndex;
+            bool cardIdMatches = string.IsNullOrEmpty(cardId) || candidate.cardId == cardId;
+            if (!handIndexMatches || !cardIdMatches)
+                continue;
+
+            removedView = candidate;
+            pendingRemovedHandViews.RemoveAt(i);
+            return true;
+        }
+
+        for (int i = 0; i < pendingRemovedHandViews.Count; i++)
+        {
+            PendingRemovedHandView candidate = pendingRemovedHandViews[i];
+            if (candidate == null || candidate.cardObject == null)
+            {
+                pendingRemovedHandViews.RemoveAt(i);
+                i--;
+                continue;
+            }
+
+            if (!string.IsNullOrEmpty(cardId) && candidate.cardId != cardId)
+                continue;
+
+            removedView = candidate;
+            pendingRemovedHandViews.RemoveAt(i);
+            return true;
+        }
+
+        return false;
     }
 
     private void TryProcessPendingVisualEvents()
@@ -601,6 +807,33 @@ public class HandDisplayManager : MonoBehaviour
         }
 
         return false;
+    }
+
+    private bool StartQueuedHandExileFx(GameObject cardObj, string cardId)
+    {
+        if (cardObj == null)
+            return false;
+
+        if (string.IsNullOrEmpty(cardId))
+        {
+            Destroy(cardObj);
+            return false;
+        }
+
+        bool queued = HandCardExileFxUI.TryQueueFromHand(cardObj, cardId, null, () =>
+        {
+            if (cardObj != null)
+            {
+                Destroy(cardObj);
+            }
+        });
+
+        if (!queued && cardObj != null)
+        {
+            Destroy(cardObj);
+        }
+
+        return queued;
     }
 
     private void ConcealCardImmediately(GameObject cardObj)

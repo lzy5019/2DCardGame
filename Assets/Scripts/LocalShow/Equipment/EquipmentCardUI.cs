@@ -17,14 +17,19 @@ public class EquipmentCardUI : MonoBehaviour
 
     #region 运行时状态
     private string cardId;
+    private CardData cardData;
     private bool isWeapon;
     private int equipmentIndex = -1;
     #endregion
+
+    public string CardId => cardId;
+    public CardData CardData => cardData;
 
     #region 初始化
     public void Setup(string newCardId, CardData cardData, bool weapon, int index, bool isUsed, bool canUse)
     {
         cardId = newCardId;
+        this.cardData = cardData;
         isWeapon = weapon;
         equipmentIndex = index;
 

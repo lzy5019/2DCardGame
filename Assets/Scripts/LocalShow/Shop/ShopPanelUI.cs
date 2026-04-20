@@ -15,6 +15,7 @@ public class ShopPanelUI : MonoBehaviour
     [SerializeField] private RectTransform buyFxTarget;
     [SerializeField] private ShopPurchaseFxUI purchaseFxPrefab;
     [SerializeField] private ShopDefeatFxUI defeatFxPrefab;
+    [SerializeField] private ShopExileFxUI exileFxPrefab;
     #endregion
 
     #region 运行时状态
@@ -233,6 +234,31 @@ public class ShopPanelUI : MonoBehaviour
         StartCoroutine(PlayPurchaseFxAndDestroy(purchaseFx, card.cardSprite, buyFxTarget));
     }
 
+    public void PlayLocalShopExileFx(int slotIndex, string cardId, bool isBaseShop)
+    {
+        if (string.IsNullOrEmpty(cardId))
+            return;
+
+        CardData card = CardDatabase.Instance != null
+            ? CardDatabase.Instance.GetCardById(cardId)
+            : null;
+
+        if (card == null || card.cardSprite == null)
+            return;
+
+        ShopSlotUI targetSlot = GetTargetSlot(slotIndex, isBaseShop);
+        if (targetSlot == null || exileFxPrefab == null)
+            return;
+
+        RectTransform targetSlotRect = targetSlot.transform as RectTransform;
+        if (targetSlotRect == null)
+            return;
+
+        ShopExileFxUI exileFx = Instantiate(exileFxPrefab, targetSlotRect, false);
+        PrepareSpawnedFxRect(exileFx.transform as RectTransform);
+        StartCoroutine(PlayExileFxAndDestroy(exileFx, card.cardSprite));
+    }
+
     private ShopSlotUI GetTargetSlot(int slotIndex, bool isBaseShop)
     {
         List<ShopSlotUI> slotList = isBaseShop ? baseSlots : centerSlots;
@@ -268,6 +294,19 @@ public class ShopPanelUI : MonoBehaviour
         if (defeatFx != null)
         {
             Destroy(defeatFx.gameObject);
+        }
+    }
+
+    private IEnumerator PlayExileFxAndDestroy(ShopExileFxUI exileFx, Sprite cardSprite)
+    {
+        if (exileFx == null)
+            yield break;
+
+        yield return exileFx.PlayExileRoutine(cardSprite);
+
+        if (exileFx != null)
+        {
+            Destroy(exileFx.gameObject);
         }
     }
 

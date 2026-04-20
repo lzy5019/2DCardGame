@@ -303,10 +303,40 @@ public class CardEffectManager : NetworkBehaviour
             }
 
             case "10005":   // 伊芙利特
-                //选择一名玩家（包括自己）
-                //选择查看其手牌中至多两张牌
-                //若存在基本牌，则选择至多一张，随机变成低一级的基本牌
-                return CardEffectResult.Applied;
+                {
+                if (MatchManager.Instance == null)
+                    return CardEffectResult.Failed;
+
+                List<int> optionPlayerIndices = new List<int>();
+                List<int> optionPayloads = new List<int>();
+
+                for (int i = 0; i < MatchManager.Instance.playerList.Count; i++)
+                {
+                    PlayerState targetPlayer = MatchManager.Instance.playerList[i];
+                    if (targetPlayer == null)
+                        continue;
+
+                    optionPlayerIndices.Add(targetPlayer.playerIndex);
+                    optionPayloads.Add(targetPlayer.playerIndex);
+                }
+
+                if (optionPlayerIndices.Count == 0)
+                {
+                    player.ShowHintToOwner("没有可选择的玩家");
+                    return CardEffectResult.Applied;
+                }
+
+                player.BeginPlayerSelection(
+                    PendingSelectionType.IfritChooseOnePlayer,
+                    "选择1名玩家",
+                    1,
+                    1,
+                    optionPlayerIndices,
+                    optionPayloads
+                );
+
+                return CardEffectResult.Pending;
+            }
 
             case "10006":   // 麦哲伦
                 {
@@ -394,9 +424,47 @@ public class CardEffectManager : NetworkBehaviour
             }
 
             case "10008":   // 赫默
-                //选择一名玩家（包括自己）
-                //将其弃牌堆洗回抽牌堆，并洗牌
-                //然后打出这牌的玩家抽一张牌
+                player.AddMana(2);
+                return CardEffectResult.Applied;
+
+            case "10009":   // 星源
+            {
+                if (MatchManager.Instance == null)
+                    return CardEffectResult.Failed;
+
+                List<int> optionPlayerIndices = new List<int>();
+                List<int> optionPayloads = new List<int>();
+
+                for (int i = 0; i < MatchManager.Instance.playerList.Count; i++)
+                {
+                    PlayerState targetPlayer = MatchManager.Instance.playerList[i];
+                    if (targetPlayer == null)
+                        continue;
+
+                    optionPlayerIndices.Add(targetPlayer.playerIndex);
+                    optionPayloads.Add(targetPlayer.playerIndex);
+                }
+
+                if (optionPlayerIndices.Count == 0)
+                {
+                    player.ShowHintToOwner("没有可选择的玩家");
+                    return CardEffectResult.Applied;
+                }
+
+                player.BeginPlayerSelection(
+                    PendingSelectionType.StellarSourceChooseOnePlayer,
+                    "选择1名玩家",
+                    1,
+                    1,
+                    optionPlayerIndices,
+                    optionPayloads
+                );
+
+                return CardEffectResult.Pending;
+            }
+
+            case "10010":   // 塞雷娅
+                TryAddDerivedCardsToPlayerDeck(player, cardId, 1, true);
                 return CardEffectResult.Applied;
 
             case "19001":   // 神经损伤
@@ -413,7 +481,7 @@ public class CardEffectManager : NetworkBehaviour
                 return CardEffectResult.Applied;
 
             case "91001":   // 囊海爬行者
-            {
+                {
                 player.AddScore(4);
 
                 if (MatchManager.Instance == null)
@@ -479,7 +547,7 @@ public class CardEffectManager : NetworkBehaviour
                 return CardEffectResult.Applied;
 
             case "91004":   // 钵海收割者
-            {
+                {
                 player.AddScore(5);
 
                 TryAddDerivedCardsToPlayerDeck(player, cardId, 2);
@@ -487,7 +555,7 @@ public class CardEffectManager : NetworkBehaviour
             }
 
             case "92001":   // 皇帝的利刃
-            {
+                {
                 player.AddScore(5);
 
                 if (MatchManager.Instance == null)
@@ -575,7 +643,7 @@ public class CardEffectManager : NetworkBehaviour
                 if (handIndex < 0)
                     return CardEffectResult.Failed;
 
-                CardEffectResult banishEffectResult = player.BanishHandCardByIndex(handIndex, out _);
+                CardEffectResult banishEffectResult = player.BanishHandCardByIndex(handIndex, out _, false);
                 if (banishEffectResult == CardEffectResult.Failed)
                     return CardEffectResult.Failed;
 
@@ -597,6 +665,23 @@ public class CardEffectManager : NetworkBehaviour
         switch (cardId)
         {
             // 在这里补充“从弃牌堆进入手牌时触发”的卡牌效果。
+            default:
+                return CardEffectResult.Applied;
+        }
+    }
+
+    [Server]    // 手牌变化
+    public CardEffectResult ResolveHandTransformEffect(int playerIndex, string oldCardId, string newCardId)
+    {
+        if (!TryGetPlayer(playerIndex, out PlayerState player))
+            return CardEffectResult.Failed;
+
+        switch (oldCardId)
+        {
+            case "10008":   // 赫默
+                player.AddScore(2);
+                return CardEffectResult.Applied;
+
             default:
                 return CardEffectResult.Applied;
         }
@@ -673,7 +758,7 @@ public class CardEffectManager : NetworkBehaviour
     }
 
     [Server]
-    public bool TryAddDerivedCardsToPlayerDeck(PlayerState targetPlayer, string sourceCardId, int repeatCount)
+    public bool TryAddDerivedCardsToPlayerDeck(PlayerState targetPlayer, string sourceCardId, int repeatCount, bool addToDiscardTop = false)
     {
         if (targetPlayer == null)
             return false;
@@ -697,7 +782,14 @@ public class CardEffectManager : NetworkBehaviour
                     continue;
 
                 targetPlayer.AddCardToOwned(derivedCardData.cardId);
-                targetPlayer.AddCardToDiscard(derivedCardData.cardId);
+                if (addToDiscardTop)
+                {
+                    targetPlayer.AddCardToDiscardTop(derivedCardData.cardId);
+                }
+                else
+                {
+                    targetPlayer.AddCardToDiscard(derivedCardData.cardId);
+                }
                 addedAny = true;
             }
         }
@@ -716,6 +808,19 @@ public class CardEffectManager : NetworkBehaviour
 
         upgradedCardId = upgradePool[Random.Range(0, upgradePool.Length)];
         return !string.IsNullOrEmpty(upgradedCardId);
+    }
+
+    [Server]
+    public bool TryGetRandomBasicDowngradeCardId(string sourceCardId, out string downgradedCardId)
+    {
+        downgradedCardId = "";
+
+        string[] downgradePool = GetBasicDowngradePool(sourceCardId);
+        if (downgradePool == null || downgradePool.Length == 0)
+            return false;
+
+        downgradedCardId = downgradePool[Random.Range(0, downgradePool.Length)];
+        return !string.IsNullOrEmpty(downgradedCardId);
     }
 
     [Server]
@@ -779,6 +884,30 @@ public class CardEffectManager : NetworkBehaviour
 
             case "00102":
                 return new[] { "00100", "00101", "00001", "00002", "00003", "00004", "00005", "00006", "00007" };
+
+            default:
+                return System.Array.Empty<string>();
+        }
+    }
+
+    private string[] GetBasicDowngradePool(string sourceCardId)
+    {
+        switch (sourceCardId)
+        {
+            case "00001":
+            case "00002":
+                return new[] { "00100", "00101" };
+
+            case "00003":
+            case "00004":
+                return new[] { "00001", "00002" };
+
+            case "00005":
+            case "00006":
+                return new[] { "00003", "00004" };
+
+            case "00007":
+                return new[] { "00005", "00006" };
 
             default:
                 return System.Array.Empty<string>();

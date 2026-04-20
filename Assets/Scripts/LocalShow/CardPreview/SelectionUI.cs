@@ -42,6 +42,8 @@ public class SelectionUI : MonoBehaviour
     private readonly List<int> selectedIndexes = new List<int>();
     private readonly List<SelectionCardUI> spawnedOptions = new List<SelectionCardUI>();
     private readonly List<SelectionPlayerItemUI> spawnedPlayerOptions = new List<SelectionPlayerItemUI>();
+    private readonly List<bool> cardOptionInteractables = new List<bool>();
+    private readonly List<bool> playerOptionInteractables = new List<bool>();
 
     private int minSelectCount = 1;
     private int maxSelectCount = 1;
@@ -121,6 +123,11 @@ public class SelectionUI : MonoBehaviour
 
     public void ShowSelection(string title, List<Sprite> optionSprites, int minCount, int maxCount, Action<List<int>> onConfirm)
     {
+        ShowSelection(title, optionSprites, minCount, maxCount, null, onConfirm);
+    }
+
+    public void ShowSelection(string title, List<Sprite> optionSprites, int minCount, int maxCount, List<bool> optionInteractables, Action<List<int>> onConfirm)
+    {
         if (optionSprites == null || optionSprites.Count == 0)
         {
             Debug.LogWarning("SelectionUI: optionSprites is empty. The selection panel cannot be opened.");
@@ -130,6 +137,7 @@ public class SelectionUI : MonoBehaviour
         PrepareSelection(title, minCount, maxCount, optionSprites.Count, onConfirm, SelectionDisplayMode.Card);
         ClearPlayerOptions();
         ClearCardOptions();
+        SetCardOptionInteractables(optionSprites.Count, optionInteractables);
         BuildCardOptions(optionSprites);
         SetPanelState(SelectionDisplayMode.Card);
         RefreshOptionVisuals();
@@ -146,6 +154,7 @@ public class SelectionUI : MonoBehaviour
         PrepareSelection(title, minCount, maxCount, optionPlayers.Count, onConfirm, SelectionDisplayMode.Player);
         ClearCardOptions();
         ClearPlayerOptions();
+        SetPlayerOptionInteractables(optionPlayers.Count, null);
         BuildPlayerOptions(optionPlayers);
         SetPanelState(SelectionDisplayMode.Player);
         RefreshOptionVisuals();
@@ -160,6 +169,8 @@ public class SelectionUI : MonoBehaviour
 
         ClearCardOptions();
         ClearPlayerOptions();
+        cardOptionInteractables.Clear();
+        playerOptionInteractables.Clear();
 
         if (selectionPanel != null)
         {
@@ -187,6 +198,13 @@ public class SelectionUI : MonoBehaviour
         if (!isSelecting)
             return;
 
+        if (maxSelectCount <= 0)
+            return;
+
+        int optionCount = GetCurrentOptionCount();
+        if (optionIndex < 0 || optionIndex >= optionCount)
+            return;
+
         if (selectedIndexes.Contains(optionIndex))
         {
             selectedIndexes.Remove(optionIndex);
@@ -195,7 +213,10 @@ public class SelectionUI : MonoBehaviour
         {
             if (selectedIndexes.Count >= maxSelectCount)
             {
-                selectedIndexes.RemoveAt(0);
+                if (selectedIndexes.Count > 0)
+                {
+                    selectedIndexes.RemoveAt(0);
+                }
             }
 
             selectedIndexes.Add(optionIndex);
@@ -296,6 +317,7 @@ public class SelectionUI : MonoBehaviour
             }
 
             cardUI.Setup(optionSprites[i], i, OnOptionClicked);
+            cardUI.SetInteractable(IsCardOptionInteractable(i));
             spawnedOptions.Add(cardUI);
         }
     }
@@ -322,6 +344,7 @@ public class SelectionUI : MonoBehaviour
             }
 
             playerItemUI.Setup(targetPlayer, i, OnOptionClicked);
+            playerItemUI.SetInteractable(IsPlayerOptionInteractable(i));
             spawnedPlayerOptions.Add(playerItemUI);
         }
     }
@@ -363,6 +386,7 @@ public class SelectionUI : MonoBehaviour
 
                 bool isSelected = selectedIndexes.Contains(i);
                 spawnedPlayerOptions[i].SetSelected(isSelected);
+                spawnedPlayerOptions[i].SetInteractable(IsPlayerOptionInteractable(i));
             }
 
             return;
@@ -375,6 +399,7 @@ public class SelectionUI : MonoBehaviour
 
             bool isSelected = selectedIndexes.Contains(i);
             spawnedOptions[i].SetSelected(isSelected);
+            spawnedOptions[i].SetInteractable(IsCardOptionInteractable(i));
         }
     }
     #endregion
@@ -417,6 +442,69 @@ public class SelectionUI : MonoBehaviour
         }
 
         SetBackgroundVisible(isBackgroundVisible);
+    }
+
+    private int GetCurrentOptionCount()
+    {
+        if (currentDisplayMode == SelectionDisplayMode.Player)
+        {
+            return spawnedPlayerOptions.Count;
+        }
+
+        if (currentDisplayMode == SelectionDisplayMode.Card)
+        {
+            return spawnedOptions.Count;
+        }
+
+        return 0;
+    }
+
+    private void SetCardOptionInteractables(int optionCount, List<bool> optionInteractables)
+    {
+        cardOptionInteractables.Clear();
+
+        for (int i = 0; i < optionCount; i++)
+        {
+            bool interactable = maxSelectCount > 0;
+            if (optionInteractables != null && i < optionInteractables.Count)
+            {
+                interactable &= optionInteractables[i];
+            }
+
+            cardOptionInteractables.Add(interactable);
+        }
+    }
+
+    private void SetPlayerOptionInteractables(int optionCount, List<bool> optionInteractables)
+    {
+        playerOptionInteractables.Clear();
+
+        for (int i = 0; i < optionCount; i++)
+        {
+            bool interactable = maxSelectCount > 0;
+            if (optionInteractables != null && i < optionInteractables.Count)
+            {
+                interactable &= optionInteractables[i];
+            }
+
+            playerOptionInteractables.Add(interactable);
+        }
+    }
+
+    private bool IsCardOptionInteractable(int optionIndex)
+    {
+        if (optionIndex < 0 || optionIndex >= cardOptionInteractables.Count)
+            return maxSelectCount > 0;
+
+        return cardOptionInteractables[optionIndex];
+    }
+
+    private bool IsPlayerOptionInteractable(int optionIndex)
+    {
+        if (optionIndex < 0 || optionIndex >= playerOptionInteractables.Count)
+            return maxSelectCount > 0;
+
+        return playerOptionInteractables[optionIndex];
     }
 }
 

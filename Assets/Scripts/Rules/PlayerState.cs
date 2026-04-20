@@ -50,6 +50,7 @@ public class PlayerState : NetworkBehaviour
     private readonly List<int> localSelectionPayloads = new List<int>();    // 玩家确认选择时，本地选项到负载的映射。
     private int pendingMinSelectCount = 1;
     private int pendingMaxSelectCount = 1;
+    private int pendingTargetPlayerIndex = -1;
 
     [Header("待处理公共动作")]
     private bool hasPendingPublicAction = false;
@@ -91,6 +92,7 @@ public class PlayerState : NetworkBehaviour
         equippedWeaponCardId = "";
         equippedWeaponUsed = false;
         playedCardHistoryIds.Clear();
+        ResetPendingSelectionContext();
         ClearPendingPublicAction();
     }
     public override void OnStartServer()
@@ -335,6 +337,15 @@ public class PlayerState : NetworkBehaviour
         ShopPanelUI.Instance.PlayLocalShopResultFx(slotIndex, cardId, isBaseShop);
     }
 
+    [TargetRpc]
+    private void TargetPlayShopExileFx(NetworkConnectionToClient target, int slotIndex, string cardId, bool isBaseShop)
+    {
+        if (ShopPanelUI.Instance == null)
+            return;
+
+        ShopPanelUI.Instance.PlayLocalShopExileFx(slotIndex, cardId, isBaseShop);
+    }
+
     [Server]
     public void ShowHintToOwner(string message)
     {
@@ -395,6 +406,30 @@ public class PlayerState : NetworkBehaviour
         }
 
         HandDisplayManager.Instance.NotifyIncomingReshuffleFx(movedCardCount);
+    }
+
+    [TargetRpc]
+    private void TargetNotifyIncomingHandExileFx(NetworkConnectionToClient target, int handIndex, string cardId)
+    {
+        if (HandDisplayManager.Instance == null)
+            return;
+
+        HandDisplayManager.Instance.NotifyIncomingHandExileFx(handIndex, cardId);
+    }
+
+    [TargetRpc]
+    private void TargetPlayPileExileFx(NetworkConnectionToClient target, string cardId, int sourceTypeRaw)
+    {
+        HandCardExileFxSource sourceType = HandCardExileFxSource.DiscardPile;
+        if (Enum.IsDefined(typeof(HandCardExileFxSource), sourceTypeRaw))
+        {
+            sourceType = (HandCardExileFxSource)sourceTypeRaw;
+        }
+
+        if (sourceType == HandCardExileFxSource.Hand)
+            return;
+
+        HandCardExileFxUI.TryQueueFromPile(cardId, sourceType);
     }
 
     public int GetDisplayedDrawPileCount()
@@ -744,6 +779,15 @@ public class PlayerState : NetworkBehaviour
     }
 
     [Server]
+    public void AddCardToDiscardTop(string cardId)
+    {
+        if (string.IsNullOrEmpty(cardId)) return;
+
+        // 当前项目里弃牌堆新增卡默认都追加到末尾，这里沿用同一套“堆顶”语义。
+        discardPile.Add(cardId);
+    }
+
+    [Server]
     public CardEffectResult AddCardToBanish(string cardId)
     {
         if (string.IsNullOrEmpty(cardId)) return CardEffectResult.Failed;
@@ -902,6 +946,11 @@ public class PlayerState : NetworkBehaviour
         if (playedIndex < 0)
             return CardEffectResult.Failed;
 
+        if (connectionToClient != null)
+        {
+            TargetPlayPileExileFx(connectionToClient, cardId, (int)HandCardExileFxSource.PlayedPile);
+        }
+
         playedCardIds.RemoveAt(playedIndex);
         return AddCardToBanish(cardId);
     }
@@ -998,6 +1047,15 @@ public class PlayerState : NetworkBehaviour
         AddCardToOwned(newCardId);
         UpdateHandCount();
 
+        if (CardEffectManager.Instance != null)
+        {
+            CardEffectResult transformEffectResult = CardEffectManager.Instance.ResolveHandTransformEffect(playerIndex, oldCardId, newCardId);
+            if (transformEffectResult == CardEffectResult.Failed)
+            {
+                Debug.LogWarning($"Failed to resolve transform effect for card {oldCardId} -> {newCardId}.");
+            }
+        }
+
         if (isSameCardTransform && connectionToClient != null)
         {
             TargetPlayHandTransformFx(connectionToClient, handIndex, oldCardId, newCardId);
@@ -1025,7 +1083,7 @@ public class PlayerState : NetworkBehaviour
     }
 
     [Server]
-    public CardEffectResult BanishHandCardByIndex(int handIndex, out string cardId)
+    public CardEffectResult BanishHandCardByIndex(int handIndex, out string cardId, bool playExileFx = true)
     {
         cardId = "";
 
@@ -1035,6 +1093,11 @@ public class PlayerState : NetworkBehaviour
         cardId = handCardIds[handIndex];
         if (string.IsNullOrEmpty(cardId))
             return CardEffectResult.Failed;
+
+        if (playExileFx && connectionToClient != null)
+        {
+            TargetNotifyIncomingHandExileFx(connectionToClient, handIndex, cardId);
+        }
 
         handCardIds.RemoveAt(handIndex);
         UpdateHandCount();
@@ -1085,7 +1148,33 @@ public class PlayerState : NetworkBehaviour
         if (string.IsNullOrEmpty(cardId))
             return CardEffectResult.Failed;
 
+        if (connectionToClient != null)
+        {
+            TargetPlayPileExileFx(connectionToClient, cardId, (int)HandCardExileFxSource.DiscardPile);
+        }
+
         discardPile.RemoveAt(discardIndex);
+        return AddCardToBanish(cardId);
+    }
+
+    [Server]
+    public CardEffectResult BanishDrawPileCardByIndex(int drawIndex, out string cardId)
+    {
+        cardId = "";
+
+        if (drawIndex < 0 || drawIndex >= drawPile.Count)
+            return CardEffectResult.Failed;
+
+        cardId = drawPile[drawIndex];
+        if (string.IsNullOrEmpty(cardId))
+            return CardEffectResult.Failed;
+
+        if (connectionToClient != null)
+        {
+            TargetPlayPileExileFx(connectionToClient, cardId, (int)HandCardExileFxSource.DrawPile);
+        }
+
+        drawPile.RemoveAt(drawIndex);
         return AddCardToBanish(cardId);
     }
 
@@ -1239,7 +1328,8 @@ public class PlayerState : NetworkBehaviour
     int minCount,
     int maxCount,
     List<string> optionCardIds,
-    List<int> optionPayloads)
+    List<int> optionPayloads,
+    List<bool> optionInteractables = null)
     {
         pendingSelectionType = selectionType;
         pendingMinSelectCount = minCount;
@@ -1254,7 +1344,8 @@ public class PlayerState : NetworkBehaviour
             minCount,
             maxCount,
             optionCardIds.ToArray(),
-            optionPayloads.ToArray()
+            optionPayloads.ToArray(),
+            optionInteractables != null ? optionInteractables.ToArray() : null
         );
     }
 
@@ -1291,13 +1382,15 @@ public class PlayerState : NetworkBehaviour
     int minCount,
     int maxCount,
     string[] optionCardIds,
-    int[] optionPayloads)
+    int[] optionPayloads,
+    bool[] optionInteractables)
     {
         if (SelectionUI.Instance == null || CardDatabase.Instance == null)
             return;
 
         localSelectionPayloads.Clear();
         List<Sprite> optionSprites = new List<Sprite>();
+        List<bool> filteredInteractables = new List<bool>();
 
         for (int i = 0; i < optionCardIds.Length; i++)
         {
@@ -1313,6 +1406,7 @@ public class PlayerState : NetworkBehaviour
 
             optionSprites.Add(cardData.cardSprite);
             localSelectionPayloads.Add(optionPayloads[i]);
+            filteredInteractables.Add(optionInteractables == null || i >= optionInteractables.Length || optionInteractables[i]);
         }
 
         if (optionSprites.Count == 0)
@@ -1323,6 +1417,7 @@ public class PlayerState : NetworkBehaviour
             optionSprites,
             minCount,
             maxCount,
+            filteredInteractables,
             OnSelectionConfirmed
         );
     }
@@ -1367,7 +1462,7 @@ public class PlayerState : NetworkBehaviour
 
     private void OnSelectionConfirmed(List<int> selectedIndexes)
     {
-        if (selectedIndexes == null || selectedIndexes.Count == 0)
+        if (selectedIndexes == null)
             return;
 
         List<int> selectedPayloads = new List<int>();
@@ -1417,10 +1512,13 @@ public class PlayerState : NetworkBehaviour
         if (!MatchManager.Instance.gameStarted) return;
         if (MatchManager.Instance.GetCurrentPlayer() != this) return;
         if (!isMyTurn) return;
-        if (selectedPayloads == null || selectedPayloads.Length == 0)
+        if (selectedPayloads == null)
+            return;
+        if (selectedPayloads.Length < pendingMinSelectCount || selectedPayloads.Length > pendingMaxSelectCount)
             return;
 
         bool selectionResolvedSuccessfully = false;
+        bool selectionContinues = false;
         // 某些卡牌会在选择完成后追加第二段公共演出，例如术士的放逐动画。
         PresentationEvent? followUpPresentationEvent = null;
 
@@ -1440,6 +1538,7 @@ public class PlayerState : NetworkBehaviour
                     if (string.IsNullOrEmpty(removedCardId))
                         return;
 
+                    TargetPlayShopExileFx(connectionToClient, slotIndex, removedCardId, false);
                     ShopState.Instance.DiscardCenterCard(slotIndex);
 
                     if (!isWizard)
@@ -1651,7 +1750,252 @@ public class PlayerState : NetworkBehaviour
                     selectionResolvedSuccessfully = true;
                     break;
                 }
+
+            case PendingSelectionType.IfritChooseOnePlayer:
+                {
+                    int targetPlayerIndex = selectedPayloads[0];
+                    if (!pendingSelectionPayloads.Contains(targetPlayerIndex))
+                        return;
+                    if (!TryGetClientPlayerByIndex(targetPlayerIndex, out PlayerState targetPlayer))
+                        return;
+                    if (CardDatabase.Instance == null)
+                        return;
+
+                    pendingTargetPlayerIndex = targetPlayerIndex;
+
+                    CardData cardBackData = null;
+                    for (int i = 0; i < CardDatabase.Instance.allCards.Count; i++)
+                    {
+                        CardData candidate = CardDatabase.Instance.allCards[i];
+                        if (candidate != null && candidate.cardId == "99999")
+                        {
+                            cardBackData = candidate;
+                            break;
+                        }
+                    }
+                    if (cardBackData == null || cardBackData.cardSprite == null)
+                        return;
+
+                    List<string> optionCardIds = new List<string>();
+                    List<int> optionPayloads = new List<int>();
+
+                    for (int i = 0; i < targetPlayer.handCardIds.Count; i++)
+                    {
+                        string handCardId = targetPlayer.handCardIds[i];
+                        if (string.IsNullOrEmpty(handCardId))
+                            continue;
+
+                        optionCardIds.Add(cardBackData.cardId);
+                        optionPayloads.Add(i);
+                    }
+
+                    if (optionCardIds.Count == 0)
+                    {
+                        ShowHintToOwner("目标没有手牌可查看");
+                        selectionResolvedSuccessfully = true;
+                        break;
+                    }
+
+                    int blindPickCount = Mathf.Min(2, optionCardIds.Count);
+
+                    BeginSelection(
+                        PendingSelectionType.IfritInspectTargetHandCards,
+                        "选择至多2张手牌查看",
+                        1,
+                        blindPickCount,
+                        optionCardIds,
+                        optionPayloads
+                    );
+
+                    selectionContinues = true;
+                    break;
+                }
+
+            case PendingSelectionType.IfritInspectTargetHandCards:
+                {
+                    if (!TryGetClientPlayerByIndex(pendingTargetPlayerIndex, out PlayerState targetPlayer))
+                        return;
+                    if (CardEffectManager.Instance == null || CardDatabase.Instance == null)
+                        return;
+
+                    List<string> optionCardIds = new List<string>();
+                    List<int> optionPayloads = new List<int>();
+                    List<bool> optionInteractables = new List<bool>();
+                    bool hasDowngradeCandidate = false;
+
+                    for (int i = 0; i < selectedPayloads.Length; i++)
+                    {
+                        int handIndex = selectedPayloads[i];
+                        if (!pendingSelectionPayloads.Contains(handIndex))
+                            return;
+                        if (handIndex < 0 || handIndex >= targetPlayer.handCardIds.Count)
+                            return;
+
+                        string handCardId = targetPlayer.handCardIds[handIndex];
+                        if (string.IsNullOrEmpty(handCardId))
+                            continue;
+
+                        CardData handCardData = CardDatabase.Instance.GetCardById(handCardId);
+                        if (handCardData == null || handCardData.cardSprite == null)
+                            continue;
+
+                        optionCardIds.Add(handCardId);
+                        optionPayloads.Add(handIndex);
+                        bool canDowngrade =
+                            handCardData.cardCategory == CardCategory.Basic &&
+                            CardEffectManager.Instance.TryGetRandomBasicDowngradeCardId(handCardId, out _);
+                        optionInteractables.Add(canDowngrade);
+                        if (canDowngrade)
+                        {
+                            hasDowngradeCandidate = true;
+                        }
+                    }
+
+                    if (optionCardIds.Count == 0)
+                    {
+                        selectionResolvedSuccessfully = true;
+                        break;
+                    }
+
+                    BeginSelection(
+                        PendingSelectionType.IfritRevealTargetHandCards,
+                        "选择至多1张基础牌退化",
+                        0,
+                        hasDowngradeCandidate ? 1 : 0,
+                        optionCardIds,
+                        optionPayloads,
+                        optionInteractables
+                    );
+
+                    selectionContinues = true;
+                    break;
+                }
+
+            case PendingSelectionType.IfritRevealTargetHandCards:
+                {
+                    if (selectedPayloads.Length == 0)
+                    {
+                        selectionResolvedSuccessfully = true;
+                        break;
+                    }
+
+                    if (!TryGetClientPlayerByIndex(pendingTargetPlayerIndex, out PlayerState revealTargetPlayer))
+                        return;
+                    if (CardEffectManager.Instance == null)
+                        return;
+
+                    int selectedRevealHandIndex = selectedPayloads[0];
+                    if (!pendingSelectionPayloads.Contains(selectedRevealHandIndex))
+                        return;
+                    if (selectedRevealHandIndex < 0 || selectedRevealHandIndex >= revealTargetPlayer.handCardIds.Count)
+                        return;
+
+                    string revealedSourceCardId = revealTargetPlayer.handCardIds[selectedRevealHandIndex];
+                    if (!CardEffectManager.Instance.TryGetRandomBasicDowngradeCardId(revealedSourceCardId, out string revealedDowngradedCardId))
+                        return;
+                    if (!revealTargetPlayer.TransformHandCardByIndex(selectedRevealHandIndex, revealedDowngradedCardId, out _))
+                        return;
+
+                    selectionResolvedSuccessfully = true;
+                    break;
+
+#if false
+                    if (!TryGetClientPlayerByIndex(pendingTargetPlayerIndex, out PlayerState targetPlayer))
+                        return;
+                    if (CardEffectManager.Instance == null || CardDatabase.Instance == null)
+                        return;
+
+                    List<string> optionCardIds = new List<string>();
+                    List<int> optionPayloads = new List<int>();
+
+                    for (int i = 0; i < pendingSelectionPayloads.Count; i++)
+                    {
+                        int handIndex = pendingSelectionPayloads[i];
+                        if (handIndex < 0 || handIndex >= targetPlayer.handCardIds.Count)
+                            return;
+
+                        string handCardId = targetPlayer.handCardIds[handIndex];
+                        if (string.IsNullOrEmpty(handCardId))
+                            continue;
+
+                        CardData handCardData = CardDatabase.Instance.GetCardById(handCardId);
+                        if (handCardData == null || handCardData.cardSprite == null)
+                            continue;
+                        if (handCardData.cardCategory != CardCategory.Basic)
+                            continue;
+                        if (!CardEffectManager.Instance.TryGetRandomBasicDowngradeCardId(handCardId, out _))
+                            continue;
+
+                        optionCardIds.Add(handCardId);
+                        optionPayloads.Add(handIndex);
+                    }
+
+                    if (optionCardIds.Count == 0)
+                    {
+                        selectionResolvedSuccessfully = true;
+                        break;
+                    }
+
+                    BeginSelection(
+                        PendingSelectionType.IfritDowngradeViewedBasicCard,
+                        "选择至多1张基础牌退化",
+                        0,
+                        1,
+                        optionCardIds,
+                        optionPayloads
+                    );
+
+                    selectionContinues = true;
+                    break;
+#endif
+                }
+
+            case PendingSelectionType.IfritDowngradeViewedBasicCard:
+                {
+                    if (selectedPayloads.Length == 0)
+                    {
+                        selectionResolvedSuccessfully = true;
+                        break;
+                    }
+                    if (!TryGetClientPlayerByIndex(pendingTargetPlayerIndex, out PlayerState targetPlayer))
+                        return;
+                    if (CardEffectManager.Instance == null)
+                        return;
+
+                    int handIndex = selectedPayloads[0];
+                    if (!pendingSelectionPayloads.Contains(handIndex))
+                        return;
+                    if (handIndex < 0 || handIndex >= targetPlayer.handCardIds.Count)
+                        return;
+
+                    string sourceCardId = targetPlayer.handCardIds[handIndex];
+                    if (!CardEffectManager.Instance.TryGetRandomBasicDowngradeCardId(sourceCardId, out string downgradedCardId))
+                        return;
+                    if (!targetPlayer.TransformHandCardByIndex(handIndex, downgradedCardId, out _))
+                        return;
+
+                    selectionResolvedSuccessfully = true;
+                    break;
+                }
+
+            case PendingSelectionType.StellarSourceChooseOnePlayer:
+                {
+                    int targetPlayerIndex = selectedPayloads[0];
+                    if (!pendingSelectionPayloads.Contains(targetPlayerIndex))
+                        return;
+                    if (!TryGetClientPlayerByIndex(targetPlayerIndex, out PlayerState targetPlayer))
+                        return;
+
+                    targetPlayer.RebuildDrawPileFromDiscard();
+                    DrawCards(1);
+
+                    selectionResolvedSuccessfully = true;
+                    break;
+                }
         }
+
+        if (selectionContinues)
+            return;
 
         if (selectionResolvedSuccessfully && hasPendingPublicAction && MatchManager.Instance != null)
         {
@@ -1668,6 +2012,7 @@ public class PlayerState : NetworkBehaviour
         pendingSelectionPayloads.Clear();
         pendingMinSelectCount = 1;
         pendingMaxSelectCount = 1;
+        ResetPendingSelectionContext();
         ClearPendingPublicAction();
     }
 
@@ -1678,6 +2023,7 @@ public class PlayerState : NetworkBehaviour
         pendingSelectionPayloads.Clear();
         pendingMinSelectCount = 1;
         pendingMaxSelectCount = 1;
+        ResetPendingSelectionContext();
         ClearPendingPublicAction();
 
         if (connectionToClient != null)
@@ -1696,6 +2042,12 @@ public class PlayerState : NetworkBehaviour
 
         localSelectionPayloads.Clear();
     }
+
+    [Server]
+    private void ResetPendingSelectionContext()
+    {
+        pendingTargetPlayerIndex = -1;
+    }
     #endregion
 }
 
@@ -1707,6 +2059,11 @@ public enum PendingSelectionType
     TransformOneHandCardSameCost,
     TransformOneHandCardByMana,
     DorothyChooseOnePlayer,
+    IfritChooseOnePlayer,
+    IfritInspectTargetHandCards,
+    IfritRevealTargetHandCards,
+    IfritDowngradeViewedBasicCard,
+    StellarSourceChooseOnePlayer,
     BanishOneDiscardPileCard,
     BanishOneHandCard,            // 选择手牌放逐
     WizardDiscardOneCenterCard    // 供卡牌 00005 使用，用于选择一张中央卡牌并将其放逐。
