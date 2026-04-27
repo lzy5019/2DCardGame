@@ -136,11 +136,13 @@ public class PublicActionQueueUI : MonoBehaviour
         PublicActionType actionType = (PublicActionType)presentationEvent.legacyActionTypeValue;
         string actorLabel = GetActorLabel(presentationEvent.actorPlayerIndex);
         string sourceCards = FormatCardList(presentationEvent.sourceCardIds);
+        string primaryCardId = GetPrimaryCardId(presentationEvent.sourceCardIds);
         string detail = string.IsNullOrEmpty(presentationEvent.message)
             ? $"{actorLabel} performed legacy action {GetLegacyActionLabel(actionType)} with cards: {sourceCards}"
             : presentationEvent.message;
 
         Debug.Log($"[Presentation][LegacyAction] {detail}");
+        TryPlayCardVoice(primaryCardId, actionType);
 
         if (TryGetLegacyAnnouncementDescription(actionType, out string description))
         {
@@ -230,10 +232,10 @@ public class PublicActionQueueUI : MonoBehaviour
         string description,
         float duration)
     {
-        //if (!ShouldShowSideAnnouncement())
-        //{
-        //    yield break;
-        //}
+        if (!ShouldShowSideAnnouncement())
+        {
+            yield break;
+        }
 
         if (!EnsurePresentationPanelUI())
         {
@@ -418,6 +420,14 @@ public class PublicActionQueueUI : MonoBehaviour
             return null;
 
         return cardData.cardSprite;
+    }
+
+    private void TryPlayCardVoice(string cardId, PublicActionType actionType)
+    {
+        if (GameAudioManager.Instance == null)
+            return;
+
+        GameAudioManager.Instance.TryPlayCardVoice(cardId, actionType);
     }
     #endregion
 }

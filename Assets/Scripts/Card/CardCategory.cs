@@ -4,6 +4,7 @@
     Basic,      // 基础
     Buff,
     Debuff,
-    Rhine       // 莱茵生命
+    Rhine,      // 莱茵生命
+    Agor        // 阿戈尔
 }
 

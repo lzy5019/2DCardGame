@@ -183,5 +183,5 @@ MonoBehaviour:
   exileDuration: 1
   introScaleMultiplier: 1.08
   scaleUpProgress: 0.38
-  endFadeStart: 0.78
+  endFadeStart: 0.9
   progressPropertyName: _ExileProgress

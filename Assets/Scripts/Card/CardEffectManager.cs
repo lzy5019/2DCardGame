@@ -12,6 +12,10 @@ public enum CardEffectResult
 public class CardEffectManager : NetworkBehaviour
 {
     public static CardEffectManager Instance;
+    private const PendingSelectionType BanishTwoDiscardPileSelectionType = (PendingSelectionType)1001;
+    private const PendingSelectionType BanishUpToThreeDiscardPileSelectionType = (PendingSelectionType)1002;
+    private const PendingSelectionType AgorBanishOneHandCardSelectionType = (PendingSelectionType)1003;
+    private const PendingSelectionType AgorTransformOneCenterCardToEnemySelectionType = (PendingSelectionType)1004;
 
     #region 生命周期
     private void Awake()
@@ -470,6 +474,85 @@ public class CardEffectManager : NetworkBehaviour
             case "19001":   // 神经损伤
                 return player.BanishPlayedCardById(cardId);
 
+            // ----阿戈尔----
+            case "20001":   // 斯卡蒂
+                player.DrawCards(1);
+                return BeginDiscardPileBanishSelection(
+                    player,
+                    BanishTwoDiscardPileSelectionType,
+                    "放逐弃牌堆2张卡",
+                    2
+                );
+
+            case "20002":   // 安哲拉
+                return BeginDiscardPileBanishSelection(
+                    player,
+                    PendingSelectionType.BanishOneDiscardPileCard,
+                    "放逐弃牌堆1张卡",
+                    1
+                );
+
+            case "20003":   // 哥蕾蒂娅
+                {
+                    if (!TryGetWeightedGlaDiaDerivedCardId(cardId, out string derivedCardId))
+                        return CardEffectResult.Failed;
+
+                    player.AddCardToOwned(derivedCardId);
+                    player.AddCardToDiscard(derivedCardId);
+                    return CardEffectResult.Applied;
+                }
+
+            case "20004":   // 幽灵鲨
+                player.AddAttack(2);
+                return CardEffectResult.Applied;
+
+            case "20005":   // 归溟幽灵鲨
+                player.AddAttack(2);
+                player.AddMana(2);
+                return CardEffectResult.Applied;
+
+            case "20006":   // 海霓
+                {
+                int attackToLose = Mathf.Min(2, Mathf.Max(0, player.attack));
+                if (attackToLose > 0)
+                {
+                    player.AddAttack(-attackToLose);
+                }
+
+                if (attackToLose < 2)
+                    return CardEffectResult.Applied;
+
+                return BeginDiscardPileBanishSelection(
+                    player,
+                    BanishUpToThreeDiscardPileSelectionType,
+                    "放逐弃牌堆至多3张卡",
+                    0,
+                    3
+                );
+            }
+
+            case "20007":   // 深巡
+                return BeginHandBanishSelection(
+                    player,
+                    AgorBanishOneHandCardSelectionType,
+                    "放逐1张手牌",
+                    1,
+                    1
+                );
+
+            case "20008":   // 水月
+                return BeginCenterCardSelection(
+                    player,
+                    AgorTransformOneCenterCardToEnemySelectionType,
+                    "选择中场1张牌变化",
+                    1,
+                    1
+                );
+
+            case "20009":   // 乌尔比安
+                player.AddAttack(5);
+                return CardEffectResult.Applied;
+
             // ----敌人部分----
             case "90001":   // 赞助无人机
                 player.AddMana(2);
@@ -502,43 +585,12 @@ public class CardEffectManager : NetworkBehaviour
             case "91002":   // 枯朽吞噬者
                 {
                 player.AddScore(2);
-
-                if (CardDatabase.Instance == null)
-                    return CardEffectResult.Failed;
-
-                List<string> optionCardIds = new List<string>();
-                List<int> optionPayloads = new List<int>();
-
-                for (int i = 0; i < player.discardPile.Count; i++)
-                {
-                    string discardCardId = player.discardPile[i];
-                    if (string.IsNullOrEmpty(discardCardId))
-                        continue;
-
-                    CardData discardCardData = CardDatabase.Instance.GetCardById(discardCardId);
-                    if (discardCardData == null || discardCardData.cardSprite == null)
-                        continue;
-
-                    optionCardIds.Add(discardCardId);
-                    optionPayloads.Add(i);
-                }
-
-                if (optionCardIds.Count == 0)
-                {
-                    player.ShowHintToOwner("弃牌堆没有可放逐的卡");
-                    return CardEffectResult.Applied;
-                }
-
-                player.BeginSelection(
+                return BeginDiscardPileBanishSelection(
+                    player,
                     PendingSelectionType.BanishOneDiscardPileCard,
                     "放逐弃牌堆1张卡",
-                    1,
-                    1,
-                    optionCardIds,
-                    optionPayloads
+                    1
                 );
-
-                return CardEffectResult.Pending;
             }
 
             case "91003":   // 超新星术师
@@ -729,11 +781,27 @@ public class CardEffectManager : NetworkBehaviour
     [Server]    // 放逐牌
     public CardEffectResult ResolveBanishEnterEffect(int playerIndex, string cardId)
     {
-        if (!TryGetPlayer(playerIndex, out _))
+        if (!TryGetPlayer(playerIndex, out PlayerState player))
             return CardEffectResult.Failed;
 
         switch (cardId)
         {
+            case "20004":   // 幽灵鲨
+                player.AddScore(2);
+                return CardEffectResult.Applied;
+
+            case "20003":   // 哥蕾蒂娅
+                return ResolveAgorRecursionEffect(playerIndex, player, cardId);
+
+            case "20005":   // 归溟幽灵鲨
+                return ResolveAgorRecursionEffect(playerIndex, player, cardId);
+
+            case "20008":   // 水月
+                return ResolveAgorRecursionEffect(playerIndex, player, cardId);
+
+            case "20009":   // 乌尔比安
+                return ResolveAgorRecursionEffect(playerIndex, player, cardId);
+
             default:
                 return CardEffectResult.Applied;
         }
@@ -755,6 +823,263 @@ public class CardEffectManager : NetworkBehaviour
 
         player = MatchManager.Instance.playerList[playerIndex];
         return player != null;
+    }
+
+    [Server]
+    private CardEffectResult BeginDiscardPileBanishSelection(
+        PlayerState player,
+        PendingSelectionType selectionType,
+        string title,
+        int targetCount)
+    {
+        return BeginDiscardPileBanishSelection(player, selectionType, title, targetCount, targetCount);
+    }
+
+    [Server]
+    private CardEffectResult BeginDiscardPileBanishSelection(
+        PlayerState player,
+        PendingSelectionType selectionType,
+        string title,
+        int minCount,
+        int maxCount)
+    {
+        if (player == null || CardDatabase.Instance == null)
+            return CardEffectResult.Failed;
+
+        List<string> optionCardIds = new List<string>();
+        List<int> optionPayloads = new List<int>();
+
+        for (int i = 0; i < player.discardPile.Count; i++)
+        {
+            string discardCardId = player.discardPile[i];
+            if (string.IsNullOrEmpty(discardCardId))
+                continue;
+
+            CardData discardCardData = CardDatabase.Instance.GetCardById(discardCardId);
+            if (discardCardData == null || discardCardData.cardSprite == null)
+                continue;
+
+            optionCardIds.Add(discardCardId);
+            optionPayloads.Add(i);
+        }
+
+        if (optionCardIds.Count == 0)
+        {
+            player.ShowHintToOwner("弃牌堆没有可放逐的卡");
+            return CardEffectResult.Applied;
+        }
+
+        int clampedMinCount = Mathf.Clamp(minCount, 0, optionCardIds.Count);
+        int clampedMaxCount = Mathf.Clamp(maxCount, clampedMinCount, optionCardIds.Count);
+        player.BeginSelection(
+            selectionType,
+            title,
+            clampedMinCount,
+            clampedMaxCount,
+            optionCardIds,
+            optionPayloads
+        );
+
+        return CardEffectResult.Pending;
+    }
+
+    [Server]
+    private CardEffectResult BeginHandBanishSelection(
+        PlayerState player,
+        PendingSelectionType selectionType,
+        string title,
+        int minCount,
+        int maxCount)
+    {
+        if (player == null || CardDatabase.Instance == null)
+            return CardEffectResult.Failed;
+
+        List<string> optionCardIds = new List<string>();
+        List<int> optionPayloads = new List<int>();
+
+        for (int i = 0; i < player.handCardIds.Count; i++)
+        {
+            string handCardId = player.handCardIds[i];
+            if (string.IsNullOrEmpty(handCardId))
+                continue;
+
+            CardData handCardData = CardDatabase.Instance.GetCardById(handCardId);
+            if (handCardData == null || handCardData.cardSprite == null)
+                continue;
+
+            optionCardIds.Add(handCardId);
+            optionPayloads.Add(i);
+        }
+
+        if (optionCardIds.Count == 0)
+        {
+            player.ShowHintToOwner("没有可放逐的手牌");
+            return CardEffectResult.Applied;
+        }
+
+        int clampedMinCount = Mathf.Clamp(minCount, 0, optionCardIds.Count);
+        int clampedMaxCount = Mathf.Clamp(maxCount, clampedMinCount, optionCardIds.Count);
+        player.BeginSelection(
+            selectionType,
+            title,
+            clampedMinCount,
+            clampedMaxCount,
+            optionCardIds,
+            optionPayloads
+        );
+
+        return CardEffectResult.Pending;
+    }
+
+    [Server]
+    private CardEffectResult BeginCenterCardSelection(
+        PlayerState player,
+        PendingSelectionType selectionType,
+        string title,
+        int minCount,
+        int maxCount)
+    {
+        if (player == null || CardDatabase.Instance == null || ShopState.Instance == null)
+            return CardEffectResult.Failed;
+
+        List<string> optionCardIds = new List<string>();
+        List<int> optionPayloads = new List<int>();
+
+        for (int i = 0; i < ShopState.Instance.centerCardIds.Count; i++)
+        {
+            string centerCardId = ShopState.Instance.centerCardIds[i];
+            if (string.IsNullOrEmpty(centerCardId))
+                continue;
+
+            CardData centerCardData = CardDatabase.Instance.GetCardById(centerCardId);
+            if (centerCardData == null || centerCardData.cardSprite == null)
+                continue;
+
+            optionCardIds.Add(centerCardId);
+            optionPayloads.Add(i);
+        }
+
+        if (optionCardIds.Count == 0)
+        {
+            player.ShowHintToOwner("中场没有可变化的卡");
+            return CardEffectResult.Applied;
+        }
+
+        int clampedMinCount = Mathf.Clamp(minCount, 0, optionCardIds.Count);
+        int clampedMaxCount = Mathf.Clamp(maxCount, clampedMinCount, optionCardIds.Count);
+        player.BeginSelection(
+            selectionType,
+            title,
+            clampedMinCount,
+            clampedMaxCount,
+            optionCardIds,
+            optionPayloads
+        );
+
+        return CardEffectResult.Pending;
+    }
+
+    [Server]
+    public bool TryGetRandomEnemyCardIdUnweighted(out string enemyCardId)
+    {
+        enemyCardId = "";
+
+        if (CardDatabase.Instance == null)
+            return false;
+
+        List<CardData> candidatePool = new List<CardData>();
+        for (int i = 0; i < CardDatabase.Instance.allCards.Count; i++)
+        {
+            CardData candidate = CardDatabase.Instance.allCards[i];
+            if (candidate == null)
+                continue;
+            if (string.IsNullOrEmpty(candidate.cardId))
+                continue;
+            if (candidate.cardType != CardType.Enemy)
+                continue;
+            if (candidate.cardSprite == null)
+                continue;
+
+            candidatePool.Add(candidate);
+        }
+
+        if (candidatePool.Count == 0)
+            return false;
+
+        enemyCardId = candidatePool[Random.Range(0, candidatePool.Count)].cardId;
+        return !string.IsNullOrEmpty(enemyCardId);
+    }
+
+    [Server]
+    private CardEffectResult ResolveAgorRecursionEffect(int playerIndex, PlayerState player, string cardId)
+    {
+        if (player == null || string.IsNullOrEmpty(cardId))
+            return CardEffectResult.Failed;
+
+        int banishIndex = -1;
+        for (int i = player.banishCardIds.Count - 1; i >= 0; i--)
+        {
+            if (player.banishCardIds[i] != cardId)
+                continue;
+
+            banishIndex = i;
+            break;
+        }
+
+        if (banishIndex < 0)
+            return CardEffectResult.Failed;
+
+        player.banishCardIds.RemoveAt(banishIndex);
+        player.AddCardToOwned(cardId);
+        player.AddCardToDiscard(cardId);
+
+        return ResolveCardEffect(playerIndex, cardId);
+    }
+
+    [Server]
+    private bool TryGetWeightedGlaDiaDerivedCardId(string sourceCardId, out string derivedCardId)
+    {
+        derivedCardId = "";
+
+        if (CardDatabase.Instance == null)
+            return false;
+
+        CardData sourceCardData = CardDatabase.Instance.GetCardById(sourceCardId);
+        if (sourceCardData == null || sourceCardData.derivedCards == null || sourceCardData.derivedCards.Count == 0)
+            return false;
+
+        if (sourceCardData.derivedCards.Count >= 2)
+        {
+            CardData primaryDerivedCardData = sourceCardData.derivedCards[0];
+            CardData secondaryDerivedCardData = sourceCardData.derivedCards[1];
+
+            if (primaryDerivedCardData != null &&
+                secondaryDerivedCardData != null &&
+                !string.IsNullOrEmpty(primaryDerivedCardData.cardId) &&
+                !string.IsNullOrEmpty(secondaryDerivedCardData.cardId))
+            {
+                derivedCardId = Random.value < 0.95f
+                    ? primaryDerivedCardData.cardId
+                    : secondaryDerivedCardData.cardId;
+                return true;
+            }
+        }
+
+        List<string> fallbackCandidateIds = new List<string>();
+        for (int i = 0; i < sourceCardData.derivedCards.Count; i++)
+        {
+            CardData derivedCardData = sourceCardData.derivedCards[i];
+            if (derivedCardData == null || string.IsNullOrEmpty(derivedCardData.cardId))
+                continue;
+
+            fallbackCandidateIds.Add(derivedCardData.cardId);
+        }
+
+        if (fallbackCandidateIds.Count == 0)
+            return false;
+
+        derivedCardId = fallbackCandidateIds[Random.Range(0, fallbackCandidateIds.Count)];
+        return !string.IsNullOrEmpty(derivedCardId);
     }
 
     [Server]

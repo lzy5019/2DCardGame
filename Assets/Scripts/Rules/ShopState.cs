@@ -165,6 +165,23 @@ public class ShopState : NetworkBehaviour
     }
 
     [Server]
+    public bool ReplaceCenterCard(int slotIndex, string newCardId, bool resolveEnterEffect = true)
+    {
+        if (slotIndex < 0 || slotIndex >= centerCardIds.Count)
+            return false;
+        if (string.IsNullOrEmpty(newCardId))
+            return false;
+
+        centerCardIds[slotIndex] = newCardId;
+        if (resolveEnterEffect)
+        {
+            ResolveCenterEnterEffect(newCardId, slotIndex);
+        }
+
+        return true;
+    }
+
+    [Server]
     private void ResolveCenterEnterEffect(string cardId, int slotIndex)
     {
         if (string.IsNullOrEmpty(cardId))

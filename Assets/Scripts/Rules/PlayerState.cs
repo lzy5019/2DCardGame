@@ -6,6 +6,10 @@ using System;
 
 public class PlayerState : NetworkBehaviour
 {
+    private const PendingSelectionType BanishTwoDiscardPileSelectionType = (PendingSelectionType)1001;
+    private const PendingSelectionType BanishUpToThreeDiscardPileSelectionType = (PendingSelectionType)1002;
+    private const PendingSelectionType AgorBanishOneHandCardSelectionType = (PendingSelectionType)1003;
+    private const PendingSelectionType AgorTransformOneCenterCardToEnemySelectionType = (PendingSelectionType)1004;
     [Header("身份信息")]
     [SyncVar] public int playerIndex = -1;
     [SyncVar] public string playerName = "";
@@ -1577,6 +1581,17 @@ public class PlayerState : NetworkBehaviour
                         $"{playerName} triggered a banish presentation for {banishedCardId}"
                     );
 
+                    if (banishEffectResult == CardEffectResult.Pending)
+                    {
+                        if (MatchManager.Instance != null)
+                        {
+                            BroadcastPresentationEvent(followUpPresentationEvent.Value);
+                        }
+
+                        selectionContinues = true;
+                        break;
+                    }
+
                     selectionResolvedSuccessfully = true;
                     break;
                 }
@@ -1598,6 +1613,198 @@ public class PlayerState : NetworkBehaviour
                         new[] { banishedCardId },
                         $"{playerName} triggered a banish presentation for {banishedCardId}"
                     );
+
+                    if (banishEffectResult == CardEffectResult.Pending)
+                    {
+                        if (MatchManager.Instance != null)
+                        {
+                            BroadcastPresentationEvent(followUpPresentationEvent.Value);
+                        }
+
+                        selectionContinues = true;
+                        break;
+                    }
+
+                    selectionResolvedSuccessfully = true;
+                    break;
+                }
+
+            case BanishTwoDiscardPileSelectionType:
+                {
+                    List<int> discardIndices = new List<int>();
+
+                    for (int i = 0; i < selectedPayloads.Length; i++)
+                    {
+                        int discardIndex = selectedPayloads[i];
+                        if (!pendingSelectionPayloads.Contains(discardIndex))
+                            return;
+                        if (discardIndices.Contains(discardIndex))
+                            return;
+
+                        discardIndices.Add(discardIndex);
+                    }
+
+                    discardIndices.Sort();
+
+                    List<string> banishedCardIds = new List<string>();
+                    bool nestedSelectionStarted = false;
+                    for (int i = discardIndices.Count - 1; i >= 0; i--)
+                    {
+                        int discardIndex = discardIndices[i];
+                        CardEffectResult banishEffectResult = BanishDiscardPileCardByIndex(discardIndex, out string banishedCardId);
+                        if (banishEffectResult == CardEffectResult.Failed)
+                            return;
+                        if (banishEffectResult == CardEffectResult.Pending)
+                            nestedSelectionStarted = true;
+
+                        banishedCardIds.Add(banishedCardId);
+                    }
+
+                    banishedCardIds.Reverse();
+                    followUpPresentationEvent = PresentationEvent.CreateRemoveCards(
+                        playerIndex,
+                        PresentationStyle.FireDissolve,
+                        WrapCardId(pendingPublicCardId),
+                        banishedCardIds.ToArray(),
+                        $"{playerName} triggered a banish presentation for {banishedCardIds.Count} cards"
+                    );
+
+                    if (nestedSelectionStarted)
+                    {
+                        if (MatchManager.Instance != null)
+                        {
+                            BroadcastPresentationEvent(followUpPresentationEvent.Value);
+                        }
+
+                        selectionContinues = true;
+                        break;
+                    }
+
+                    selectionResolvedSuccessfully = true;
+                    break;
+                }
+
+            case BanishUpToThreeDiscardPileSelectionType:
+                {
+                    List<int> discardIndices = new List<int>();
+
+                    for (int i = 0; i < selectedPayloads.Length; i++)
+                    {
+                        int discardIndex = selectedPayloads[i];
+                        if (!pendingSelectionPayloads.Contains(discardIndex))
+                            return;
+                        if (discardIndices.Contains(discardIndex))
+                            return;
+
+                        discardIndices.Add(discardIndex);
+                    }
+
+                    if (discardIndices.Count == 0)
+                    {
+                        selectionResolvedSuccessfully = true;
+                        break;
+                    }
+
+                    discardIndices.Sort();
+
+                    List<string> banishedCardIds = new List<string>();
+                    bool nestedSelectionStarted = false;
+                    for (int i = discardIndices.Count - 1; i >= 0; i--)
+                    {
+                        int discardIndex = discardIndices[i];
+                        CardEffectResult banishEffectResult = BanishDiscardPileCardByIndex(discardIndex, out string banishedCardId);
+                        if (banishEffectResult == CardEffectResult.Failed)
+                            return;
+                        if (banishEffectResult == CardEffectResult.Pending)
+                            nestedSelectionStarted = true;
+
+                        banishedCardIds.Add(banishedCardId);
+                    }
+
+                    banishedCardIds.Reverse();
+                    followUpPresentationEvent = PresentationEvent.CreateRemoveCards(
+                        playerIndex,
+                        PresentationStyle.FireDissolve,
+                        WrapCardId(pendingPublicCardId),
+                        banishedCardIds.ToArray(),
+                        $"{playerName} triggered a banish presentation for {banishedCardIds.Count} cards"
+                    );
+
+                    if (nestedSelectionStarted)
+                    {
+                        if (MatchManager.Instance != null)
+                        {
+                            BroadcastPresentationEvent(followUpPresentationEvent.Value);
+                        }
+
+                        selectionContinues = true;
+                        break;
+                    }
+
+                    selectionResolvedSuccessfully = true;
+                    break;
+                }
+
+            case AgorBanishOneHandCardSelectionType:
+                {
+                    int handIndex = selectedPayloads[0];
+                    if (!pendingSelectionPayloads.Contains(handIndex))
+                        return;
+
+                    CardEffectResult banishEffectResult = BanishHandCardByIndex(handIndex, out string banishedCardId);
+                    if (banishEffectResult == CardEffectResult.Failed)
+                        return;
+
+                    if (CardDatabase.Instance == null)
+                        return;
+
+                    CardData banishedCardData = CardDatabase.Instance.GetCardById(banishedCardId);
+                    if (banishedCardData != null)
+                    {
+                        if (banishedCardData.cardCategory == CardCategory.Basic)
+                        {
+                            AddAttack(2);
+                        }
+                        else if (banishedCardData.cardCategory == CardCategory.Agor)
+                        {
+                            AddAttack(4);
+                        }
+                    }
+
+                    followUpPresentationEvent = PresentationEvent.CreateRemoveCards(
+                        playerIndex,
+                        PresentationStyle.FireDissolve,
+                        WrapCardId(pendingPublicCardId),
+                        new[] { banishedCardId },
+                        $"{playerName} triggered a banish presentation for {banishedCardId}"
+                    );
+
+                    if (banishEffectResult == CardEffectResult.Pending)
+                    {
+                        if (MatchManager.Instance != null)
+                        {
+                            BroadcastPresentationEvent(followUpPresentationEvent.Value);
+                        }
+
+                        selectionContinues = true;
+                        break;
+                    }
+
+                    selectionResolvedSuccessfully = true;
+                    break;
+                }
+
+            case AgorTransformOneCenterCardToEnemySelectionType:
+                {
+                    int slotIndex = selectedPayloads[0];
+                    if (!pendingSelectionPayloads.Contains(slotIndex))
+                        return;
+                    if (CardEffectManager.Instance == null || ShopState.Instance == null)
+                        return;
+                    if (!CardEffectManager.Instance.TryGetRandomEnemyCardIdUnweighted(out string enemyCardId))
+                        return;
+                    if (!ShopState.Instance.ReplaceCenterCard(slotIndex, enemyCardId, true))
+                        return;
 
                     selectionResolvedSuccessfully = true;
                     break;
