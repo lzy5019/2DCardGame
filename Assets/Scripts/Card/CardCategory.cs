@@ -5,6 +5,8 @@
     Buff,
     Debuff,
     Rhine,      // 莱茵生命
-    Agor        // 阿戈尔
+    Agor,       // 阿戈尔
+    Laterano,   // 拉特兰
+    Default
 }
 

@@ -157,19 +157,16 @@ MonoBehaviour:
   syncMode: 0
   syncInterval: 0
   startCards:
-  - 20002
-  - 20004
-  - 20001
-  - 20007
-  - 20006
-  - 00004
-  - 20003
-  - 00004
-  - 00003
-  - 00004
-  - 20008
-  - 20009
-  - 20005
+  - 30001
+  - 30001
+  - 30002
+  - 30003
+  - 30004
+  - 30005
+  - 30007
+  - 30008
+  - 30009
+  - 30002
   gameStarted: 0
   currentTurnPlayerIndex: -1
   waitingForPublicActionDrain: 0
@@ -479,7 +476,7 @@ Transform:
   m_GameObject: {fileID: 22835367}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: -9, y: -1.14, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -2504,7 +2501,7 @@ Canvas:
   m_OverridePixelPerfect: 0
   m_SortingBucketNormalizedSize: 0
   m_VertexColorAlwaysGammaSpace: 0
-  m_AdditionalShaderChannelsFlag: 0
+  m_AdditionalShaderChannelsFlag: 25
   m_UpdateRectTransformForStandalone: 0
   m_SortingLayerID: 0
   m_SortingOrder: 45
@@ -2904,6 +2901,18 @@ MonoBehaviour:
   - effectId: 3
     title: "\u6D04\u6E38\uFF1A"
     description: "\u4ECE\u73A9\u5BB6\u724C\u7EC4\u653E\u9010\u65F6\uFF0C\u6539\u4E3A\u653E\u5165\u5F03\u724C\u5806\uFF0C\u5E76\u89E6\u53D1\u6548\u679C"
+  - effectId: 4
+    title: "\u795D\u798F\uFF1A"
+    description: "\u5B58\u5728\u4E00\u5B9A\u8F6E\u6B21\u6216\u8005\u6D88\u8017\u4E00\u5B9A\u8D44\u6E90\u89E3\u9664"
+  - effectId: 5
+    title: "\u5171\u611F\uFF1A"
+    description: "\u4ECE\u62BD\u724C\u5806\u62BD\u53D6\u4E00\u5F20\u8D39\u7528\u4F4E\u4E8E\u6B64\u5361\u7684\u540C\u9635\u8425\u5361\u724C"
+  - effectId: 6
+    title: "\u6289\u62E9"
+    description: "\u4ECE\u591A\u4E2A\u9009\u9879\u9009\u53D6\u4E00\u9879\u6267\u884C"
+  - effectId: 7
+    title: "\u8FDE\u643A"
+    description: "\u5F53\u672C\u56DE\u5408\u6253\u51FA\u7684\u4E0A\u4E00\u5F20\u724C\u4E0E\u6B64\u724C\u540C\u9635\u8425\uFF0C\u5219\u89E6\u53D1\u6548\u679C"
   derivedCardRevealDelay: 0.4
   derivedCardSwitchInterval: 1
 --- !u!1 &352325348
@@ -4320,8 +4329,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0.5}
   m_AnchorMax: {x: 0, y: 0.5}
-  m_AnchoredPosition: {x: 337, y: -53}
-  m_SizeDelta: {x: 1200, y: 220}
+  m_AnchoredPosition: {x: 94, y: -40}
+  m_SizeDelta: {x: 600, y: 220}
   m_Pivot: {x: 0, y: 1}
 --- !u!114 &570743738
 MonoBehaviour:
@@ -6014,6 +6023,41 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 961578468}
   m_CullTransparentMesh: 1
+--- !u!1 &976789048
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 976789049}
+  m_Layer: 5
+  m_Name: State Area
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &976789049
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 976789048}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1548746426}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0.5, y: 0.5}
+  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchoredPosition: {x: 159, y: -133}
+  m_SizeDelta: {x: 100, y: 100}
+  m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1 &1014313099
 GameObject:
   m_ObjectHideFlags: 0
@@ -8458,6 +8502,7 @@ RectTransform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 405773131}
+  - {fileID: 976789049}
   - {fileID: 570743737}
   - {fileID: 1656355204}
   - {fileID: 1635821892}
@@ -8885,7 +8930,7 @@ Transform:
   m_GameObject: {fileID: 1619963493}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: -8.94, y: -2.29, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []

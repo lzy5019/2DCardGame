@@ -6,10 +6,6 @@ using System;
 
 public class PlayerState : NetworkBehaviour
 {
-    private const PendingSelectionType BanishTwoDiscardPileSelectionType = (PendingSelectionType)1001;
-    private const PendingSelectionType BanishUpToThreeDiscardPileSelectionType = (PendingSelectionType)1002;
-    private const PendingSelectionType AgorBanishOneHandCardSelectionType = (PendingSelectionType)1003;
-    private const PendingSelectionType AgorTransformOneCenterCardToEnemySelectionType = (PendingSelectionType)1004;
     [Header("身份信息")]
     [SyncVar] public int playerIndex = -1;
     [SyncVar] public string playerName = "";
@@ -960,6 +956,25 @@ public class PlayerState : NetworkBehaviour
     }
 
     [Server]
+    public bool MovePlayedCardToDrawPileBottom(string cardId)
+    {
+        if (string.IsNullOrEmpty(cardId))
+            return false;
+
+        for (int i = playedCardIds.Count - 1; i >= 0; i--)
+        {
+            if (playedCardIds[i] != cardId)
+                continue;
+
+            playedCardIds.RemoveAt(i);
+            drawPile.Add(cardId);
+            return true;
+        }
+
+        return false;
+    }
+
+    [Server]
     private bool EquipCardFromHand(string cardId, int handIndex)
     {
         if (string.IsNullOrEmpty(cardId)) return false;
@@ -1138,6 +1153,33 @@ public class PlayerState : NetworkBehaviour
 
         discardPile.RemoveAt(discardIndex);
         return EnterHandCard(cardId, true, false); 
+    }
+
+    [Server]
+    public CardEffectResult MoveDrawPileCardToHandByIndex(int drawIndex, out string cardId)
+    {
+        cardId = "";
+
+        if (drawIndex < 0 || drawIndex >= drawPile.Count)
+            return CardEffectResult.Failed;
+
+        cardId = drawPile[drawIndex];
+        if (string.IsNullOrEmpty(cardId))
+            return CardEffectResult.Failed;
+
+        if (connectionToClient != null)
+        {
+            HandCardDrawFxMode drawFxMode = HandCardDrawFxMode.ToHand;
+            if (CardEffectManager.Instance != null)
+            {
+                drawFxMode = CardEffectManager.Instance.GetDrawFxMode(cardId);
+            }
+
+            TargetNotifyIncomingDrawFx(connectionToClient, cardId, (int)drawFxMode);
+        }
+
+        drawPile.RemoveAt(drawIndex);
+        return EnterHandCard(cardId, false, true);
     }
 
     [Server]
@@ -1629,7 +1671,7 @@ public class PlayerState : NetworkBehaviour
                     break;
                 }
 
-            case BanishTwoDiscardPileSelectionType:
+            case PendingSelectionType.BanishTwoDiscardPileCards:
                 {
                     List<int> discardIndices = new List<int>();
 
@@ -1684,7 +1726,7 @@ public class PlayerState : NetworkBehaviour
                     break;
                 }
 
-            case BanishUpToThreeDiscardPileSelectionType:
+            case PendingSelectionType.BanishUpToThreeDiscardPileCards:
                 {
                     List<int> discardIndices = new List<int>();
 
@@ -1745,7 +1787,7 @@ public class PlayerState : NetworkBehaviour
                     break;
                 }
 
-            case AgorBanishOneHandCardSelectionType:
+            case PendingSelectionType.AgorBanishOneHandCard:
                 {
                     int handIndex = selectedPayloads[0];
                     if (!pendingSelectionPayloads.Contains(handIndex))
@@ -1794,7 +1836,7 @@ public class PlayerState : NetworkBehaviour
                     break;
                 }
 
-            case AgorTransformOneCenterCardToEnemySelectionType:
+            case PendingSelectionType.AgorTransformOneCenterCardToEnemy:
                 {
                     int slotIndex = selectedPayloads[0];
                     if (!pendingSelectionPayloads.Contains(slotIndex))
@@ -1805,6 +1847,68 @@ public class PlayerState : NetworkBehaviour
                         return;
                     if (!ShopState.Instance.ReplaceCenterCard(slotIndex, enemyCardId, true))
                         return;
+
+                    selectionResolvedSuccessfully = true;
+                    break;
+                }
+
+            case PendingSelectionType.LateranoChooseManaOrAttack:
+                {
+                    int choiceIndex = selectedPayloads[0];
+                    if (!pendingSelectionPayloads.Contains(choiceIndex))
+                        return;
+
+                    switch (choiceIndex)
+                    {
+                        case 0:
+                            AddMana(2);
+                            break;
+
+                        case 1:
+                            AddAttack(2);
+                            break;
+
+                        default:
+                            return;
+                    }
+
+                    selectionResolvedSuccessfully = true;
+                    break;
+                }
+
+            case PendingSelectionType.LateranoMoveTwoDiscardCardsToHand:
+                {
+                    List<int> discardIndices = new List<int>();
+
+                    for (int i = 0; i < selectedPayloads.Length; i++)
+                    {
+                        int discardIndex = selectedPayloads[i];
+                        if (!pendingSelectionPayloads.Contains(discardIndex))
+                            return;
+                        if (discardIndices.Contains(discardIndex))
+                            return;
+
+                        discardIndices.Add(discardIndex);
+                    }
+
+                    discardIndices.Sort();
+
+                    bool nestedSelectionStarted = false;
+                    for (int i = discardIndices.Count - 1; i >= 0; i--)
+                    {
+                        int discardIndex = discardIndices[i];
+                        CardEffectResult moveResult = MoveDiscardCardToHandByIndex(discardIndex, out _);
+                        if (moveResult == CardEffectResult.Failed)
+                            return;
+                        if (moveResult == CardEffectResult.Pending)
+                            nestedSelectionStarted = true;
+                    }
+
+                    if (nestedSelectionStarted)
+                    {
+                        selectionContinues = true;
+                        break;
+                    }
 
                     selectionResolvedSuccessfully = true;
                     break;
@@ -2260,20 +2364,26 @@ public class PlayerState : NetworkBehaviour
 
 public enum PendingSelectionType
 {
-    None,
-    RhinePreviewTopThree,
-    UpgradeOneBasicHandCard,
-    TransformOneHandCardSameCost,
-    TransformOneHandCardByMana,
-    DorothyChooseOnePlayer,
-    IfritChooseOnePlayer,
-    IfritInspectTargetHandCards,
-    IfritRevealTargetHandCards,
-    IfritDowngradeViewedBasicCard,
-    StellarSourceChooseOnePlayer,
-    BanishOneDiscardPileCard,
-    BanishOneHandCard,            // 选择手牌放逐
-    WizardDiscardOneCenterCard    // 供卡牌 00005 使用，用于选择一张中央卡牌并将其放逐。
+    None,                               // No pending selection
+    RhinePreviewTopThree,               // Inspect top three cards and choose one
+    UpgradeOneBasicHandCard,            // Upgrade one basic hand card
+    TransformOneHandCardSameCost,       // Transform one hand card into a same-cost card
+    TransformOneHandCardByMana,         // Transform one hand card using current mana
+    DorothyChooseOnePlayer,             // Dorothy: choose one player
+    IfritChooseOnePlayer,               // Ifrit: choose one player
+    IfritInspectTargetHandCards,        // Ifrit: inspect target player hand cards
+    IfritRevealTargetHandCards,         // Ifrit: reveal target player hand cards
+    IfritDowngradeViewedBasicCard,      // Ifrit: downgrade one inspected basic card
+    StellarSourceChooseOnePlayer,       // Stellar Source: choose one player
+    BanishOneDiscardPileCard,           // Banish one discard pile card
+    BanishOneHandCard,                  // Banish one hand card
+    WizardDiscardOneCenterCard,         // Azling: banish one center card
+    BanishTwoDiscardPileCards,          // Agor: banish two discard pile cards
+    BanishUpToThreeDiscardPileCards,    // Agor: banish up to three discard pile cards
+    AgorBanishOneHandCard,              // Agor: banish one hand card
+    AgorTransformOneCenterCardToEnemy,  // Agor: transform one center card into an enemy
+    LateranoChooseManaOrAttack,         // Laterano: choose +2 mana or +2 attack
+    LateranoMoveTwoDiscardCardsToHand   // Laterano: move two discard pile cards to hand
 }
 
 

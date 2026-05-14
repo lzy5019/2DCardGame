@@ -10,17 +10,17 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 85158e8fcd7d79a42abd350e02039e25, type: 3}
-  m_Name: 99999
+  m_Name: "81001 \u5170\u767B\u6218\u672F"
   m_EditorClassIdentifier: 
-  cardId: 99999
+  cardId: 80001
   cost: 0
   scoreValue: 0
-  cardType: 2
-  cardCategory: 1
+  cardType: 8
+  cardCategory: 3
   cardNum: -1
-  cardSprite: {fileID: 21300000, guid: 241de1db5b524a641a36cf3c1031eb22, type: 3}
+  cardSprite: {fileID: 21300000, guid: bc135d7ac86400d4a906c3f206ebe7d7, type: 3}
   playWav: {fileID: 0}
   buyWav: {fileID: 0}
-  description: 
+  description: "\u6BCF\u56DE\u5408\u5F00\u59CB\u65F6-1\u5206"
   derivedCards: []
   effectId: 

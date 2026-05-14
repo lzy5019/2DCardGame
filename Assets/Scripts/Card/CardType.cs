@@ -10,6 +10,7 @@
     Buff,       // 祝福
     Debuff,     // 诅咒
     Reward,     // 委托的奖赏
-    Commission  // 委托
+    Commission, // 委托
+    Default
 }
 
