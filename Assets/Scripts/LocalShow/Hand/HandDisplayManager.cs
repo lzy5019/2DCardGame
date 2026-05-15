@@ -39,6 +39,7 @@ public class HandDisplayManager : MonoBehaviour
         public HandCardDrawFxRequestType requestType;
         public string cardId;
         public HandCardDrawFxMode mode;
+        public HandCardPileToHandFxSourceType sourceType;
         public int movedCardCount;
         public float expireTime;
     }
@@ -46,6 +47,7 @@ public class HandDisplayManager : MonoBehaviour
     private sealed class PendingDrawCardView
     {
         public GameObject cardObject;
+        public string cardId;
         public float expireTime;
     }
 
@@ -147,7 +149,7 @@ public class HandDisplayManager : MonoBehaviour
         switch (op)
         {
             case SyncList<string>.Operation.OP_ADD:
-                RearrangeAfterDraw();
+                RearrangeAfterHandAdd();
                 break;
 
             case SyncList<string>.Operation.OP_REMOVEAT:
@@ -206,6 +208,21 @@ public class HandDisplayManager : MonoBehaviour
         TryProcessPendingVisualEvents();
     }
 
+    public void NotifyIncomingPileToHandFx(string cardId, HandCardPileToHandFxSourceType sourceType)
+    {
+        CleanupPendingDrawFxState();
+
+        pendingIncomingVisualEvents.Add(new PendingIncomingVisualEvent
+        {
+            requestType = HandCardDrawFxRequestType.PileToHand,
+            cardId = cardId,
+            sourceType = sourceType,
+            expireTime = Time.unscaledTime + PendingDrawFxMatchTimeout
+        });
+
+        TryProcessPendingVisualEvents();
+    }
+
     public void NotifyIncomingReshuffleFx(int movedCardCount)
     {
         if (movedCardCount <= 0)
@@ -231,6 +248,7 @@ public class HandDisplayManager : MonoBehaviour
                pendingIncomingHandExileEvents.Count > 0 ||
                pendingRemovedHandViews.Count > 0 ||
                HandCardDrawFxUI.IsBusy ||
+               HandCardPileToHandFxUI.IsBusy ||
                HandCardExileFxUI.IsBusy;
     }
 
@@ -359,7 +377,7 @@ public class HandDisplayManager : MonoBehaviour
         UpdateHandLayout();
     }
 
-    public void RearrangeAfterDraw()
+    public void RearrangeAfterHandAdd()
     {
         CleanupPendingDrawFxState();
 
@@ -402,7 +420,7 @@ public class HandDisplayManager : MonoBehaviour
         cardObjects.Add(cardObj);
 
         UpdateHandLayout();
-        TrackPendingDrawCardView(cardObj);
+        TrackPendingDrawCardView(cardObj, cardId);
         TryProcessPendingVisualEvents();
     }
 
@@ -604,11 +622,14 @@ public class HandDisplayManager : MonoBehaviour
             return;
         }
 
+        if (visualEvent.requestType == HandCardDrawFxRequestType.PileToHand)
+            return;
+
         playerState.NotifyLocalDrawVisualStarted(visualEvent.cardId, visualEvent.mode);
         playerState.NotifyLocalDrawVisualResolved(visualEvent.cardId, visualEvent.mode);
     }
 
-    private void TrackPendingDrawCardView(GameObject cardObj)
+    private void TrackPendingDrawCardView(GameObject cardObj, string cardId)
     {
         if (cardObj == null)
             return;
@@ -616,6 +637,7 @@ public class HandDisplayManager : MonoBehaviour
         pendingDrawCardViews.Add(new PendingDrawCardView
         {
             cardObject = cardObj,
+            cardId = cardId,
             expireTime = Time.unscaledTime + PendingDrawFxMatchTimeout
         });
     }
@@ -702,21 +724,48 @@ public class HandDisplayManager : MonoBehaviour
                 continue;
             }
 
-            PendingDrawCardView view = ConsumePendingDrawCardView();
+            PendingDrawCardView view = ConsumePendingDrawCardView(visualEvent.cardId);
             if (view == null)
                 return;
 
             pendingIncomingVisualEvents.RemoveAt(0);
             HandCardUI handCardUI = view.cardObject != null ? view.cardObject.GetComponent<HandCardUI>() : null;
             string resolvedCardId = handCardUI != null ? handCardUI.cardId : visualEvent.cardId;
-            StartQueuedDrawFx(view.cardObject, resolvedCardId, visualEvent.mode);
+            if (visualEvent.requestType == HandCardDrawFxRequestType.PileToHand)
+            {
+                StartQueuedPileToHandFx(view.cardObject, resolvedCardId, visualEvent.sourceType);
+            }
+            else
+            {
+                StartQueuedDrawFx(view.cardObject, resolvedCardId, visualEvent.mode);
+            }
         }
     }
 
-    private PendingDrawCardView ConsumePendingDrawCardView()
+    private PendingDrawCardView ConsumePendingDrawCardView(string expectedCardId)
     {
         if (pendingDrawCardViews.Count <= 0)
             return null;
+
+        if (!string.IsNullOrEmpty(expectedCardId))
+        {
+            for (int i = 0; i < pendingDrawCardViews.Count; i++)
+            {
+                PendingDrawCardView matchingView = pendingDrawCardViews[i];
+                if (matchingView == null || matchingView.cardObject == null)
+                {
+                    pendingDrawCardViews.RemoveAt(i);
+                    i--;
+                    continue;
+                }
+
+                if (matchingView.cardId != expectedCardId)
+                    continue;
+
+                pendingDrawCardViews.RemoveAt(i);
+                return matchingView;
+            }
+        }
 
         for (int i = 0; i < pendingDrawCardViews.Count; i++)
         {
@@ -834,6 +883,20 @@ public class HandDisplayManager : MonoBehaviour
         }
 
         return queued;
+    }
+
+    private bool StartQueuedPileToHandFx(GameObject cardObj, string cardId, HandCardPileToHandFxSourceType sourceType)
+    {
+        if (cardObj == null)
+            return false;
+        if (string.IsNullOrEmpty(cardId))
+            return false;
+
+        if (HandCardPileToHandFxUI.TryQueue(cardObj, cardId, sourceType))
+            return true;
+
+        RevealCardImmediately(cardObj);
+        return false;
     }
 
     private void ConcealCardImmediately(GameObject cardObj)

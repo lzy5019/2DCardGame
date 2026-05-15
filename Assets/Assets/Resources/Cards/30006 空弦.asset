@@ -22,5 +22,6 @@ MonoBehaviour:
   playWav: {fileID: 8300000, guid: f2a2897463b178141a04c215773b48c0, type: 3}
   buyWav: {fileID: 8300000, guid: 3defcb1d5212f3241801ebf26b57c4bd, type: 3}
   description: "+2\u8D39"
-  derivedCards: []
+  derivedCards:
+  - {fileID: 11400000, guid: 96fe5300b2076a14ca9ce40f9070a257, type: 2}
   effectId: 0500000004000000

@@ -10,6 +10,8 @@ public class EquipmentZoneUI : MonoBehaviour
     [Header("界面引用")]
     [SerializeField] private Transform weaponRoot;
     [SerializeField] private Transform equipmentContentRoot;
+    [SerializeField] private Transform equipmentContentRoot2;
+    [SerializeField] private Transform equipmentContentRoot3;
     [SerializeField] private GameObject cardPrefab;
 
     [Header("可选对象")]
@@ -180,7 +182,7 @@ public class EquipmentZoneUI : MonoBehaviour
     {
         ClearEquipmentCards();
 
-        if (localPlayer == null || equipmentContentRoot == null || cardPrefab == null)
+        if (localPlayer == null || cardPrefab == null || GetFirstValidEquipmentRoot() == null)
         {
             RefreshEmptyHint();
             return;
@@ -196,7 +198,11 @@ public class EquipmentZoneUI : MonoBehaviour
             if (cardData == null)
                 continue;
 
-            GameObject obj = Instantiate(cardPrefab, equipmentContentRoot);
+            Transform parentRoot = GetEquipmentRootByDisplayIndex(i);
+            if (parentRoot == null)
+                continue;
+
+            GameObject obj = Instantiate(cardPrefab, parentRoot);
             spawnedEquipmentCards.Add(obj);
 
             EquipmentCardUI cardUI = obj.GetComponent<EquipmentCardUI>();
@@ -291,6 +297,39 @@ public class EquipmentZoneUI : MonoBehaviour
         }
 
         spawnedEquipmentCards.Clear();
+    }
+
+    private Transform GetEquipmentRootByDisplayIndex(int equipmentDisplayIndex)
+    {
+        Transform[] roots =
+        {
+            equipmentContentRoot,
+            equipmentContentRoot2,
+            equipmentContentRoot3
+        };
+
+        if (equipmentDisplayIndex >= 0)
+        {
+            Transform targetRoot = roots[equipmentDisplayIndex % roots.Length];
+            if (targetRoot != null)
+            {
+                return targetRoot;
+            }
+        }
+
+        return GetFirstValidEquipmentRoot();
+    }
+
+    private Transform GetFirstValidEquipmentRoot()
+    {
+        if (equipmentContentRoot != null)
+            return equipmentContentRoot;
+        if (equipmentContentRoot2 != null)
+            return equipmentContentRoot2;
+        if (equipmentContentRoot3 != null)
+            return equipmentContentRoot3;
+
+        return null;
     }
 
     private void ClearAll()

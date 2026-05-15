@@ -13,7 +13,8 @@ public enum HandCardDrawFxMode
 public enum HandCardDrawFxRequestType
 {
     DrawCard = 0,
-    Reshuffle = 1
+    Reshuffle = 1,
+    PileToHand = 2
 }
 
 public class HandCardDrawFxUI : MonoBehaviour

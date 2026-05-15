@@ -573,7 +573,7 @@ public class CardEffectManager : NetworkBehaviour
                 if (empathyResult == CardEffectResult.Failed)
                     return CardEffectResult.Failed;
 
-                player.AddScore(1);
+                AddLateranoScore(player, cardId, 1);
 
                 if (!player.MovePlayedCardToDrawPileBottom(cardId))
                     return CardEffectResult.Failed;
@@ -589,12 +589,12 @@ public class CardEffectManager : NetworkBehaviour
                 if (empathyResult == CardEffectResult.Failed)
                     return CardEffectResult.Failed;
 
-                player.AddAttack(1);
-                player.AddAttack(1);
+                AddLateranoAttack(player, cardId, 1);
+                AddLateranoAttack(player, cardId, 1);
 
                 if (HasLinkedPreviousCard(player, cardId))
                 {
-                    player.AddAttack(1);
+                    AddLateranoAttack(player, cardId, 1);
                 }
 
                 return empathyResult == CardEffectResult.Pending
@@ -608,11 +608,11 @@ public class CardEffectManager : NetworkBehaviour
                 if (empathyResult == CardEffectResult.Failed)
                     return CardEffectResult.Failed;
 
-                player.AddMana(2);
+                AddLateranoMana(player, cardId, 2);
 
                 if (HasLinkedPreviousCard(player, cardId))
                 {
-                    player.AddMana(1);
+                    AddLateranoMana(player, cardId, 1);
                 }
 
                 return empathyResult == CardEffectResult.Pending
@@ -630,8 +630,8 @@ public class CardEffectManager : NetworkBehaviour
 
                 if (HasLinkedPreviousCard(player, cardId))
                 {
-                    ApplyLateranoChoiceEffect(player, 0);
-                    ApplyLateranoChoiceEffect(player, 1);
+                    ApplyLateranoChoiceEffect(player, cardId, 0);
+                    ApplyLateranoChoiceEffect(player, cardId, 1);
                     return empathyResult == CardEffectResult.Pending
                         ? CardEffectResult.Pending
                         : CardEffectResult.Applied;
@@ -651,9 +651,23 @@ public class CardEffectManager : NetworkBehaviour
             }
 
             case "30006":   // 空弦
-                //共感
-                //获得祝福“兰登战术”（我们诅咒和祝福的系统还没做，这张卡先不着急）
-                //+2费
+                {
+                if (StatusEffectManager.Instance == null)
+                    return CardEffectResult.Failed;
+
+                CardEffectResult empathyResult = ResolveEmpathyWithFailureHint(player, cardId);
+                if (empathyResult == CardEffectResult.Failed)
+                    return CardEffectResult.Failed;
+
+                AddLateranoMana(player, cardId, 2);
+
+                if (!StatusEffectManager.Instance.ApplyStatus(player, "81001"))
+                    return CardEffectResult.Failed;
+
+                return empathyResult == CardEffectResult.Pending
+                    ? CardEffectResult.Pending
+                    : CardEffectResult.Applied;
+            }
 
             case "30007":   // 蕾缪安
                 {
@@ -661,7 +675,7 @@ public class CardEffectManager : NetworkBehaviour
                 if (empathyResult == CardEffectResult.Failed)
                     return CardEffectResult.Failed;
 
-                player.AddAttack(4);
+                AddLateranoAttack(player, cardId, 4);
                 return empathyResult == CardEffectResult.Pending
                     ? CardEffectResult.Pending
                     : CardEffectResult.Applied;
@@ -783,10 +797,30 @@ public class CardEffectManager : NetworkBehaviour
                 return CardEffectResult.Applied;
             }
 
+            case "000000":
+                if (StatusEffectManager.Instance == null)
+                    return CardEffectResult.Failed;
+                if (!StatusEffectManager.Instance.ApplyStatus(player, "80001"))
+                    return CardEffectResult.Failed;
+
+                return CardEffectResult.Applied;
+
             case "92002":
                 player.AddScore(3);
                 // 给其余所有玩家施放诅咒【流逝】
-                return CardEffectResult.Pending;
+                if (MatchManager.Instance == null || StatusEffectManager.Instance == null)
+                    return CardEffectResult.Failed;
+
+                for (int i = 0; i < MatchManager.Instance.playerList.Count; i++)
+                {
+                    PlayerState otherPlayer = MatchManager.Instance.playerList[i];
+                    if (otherPlayer == null || otherPlayer == player)
+                        continue;
+
+                    StatusEffectManager.Instance.ApplyStatus(otherPlayer, "80001");
+                }
+
+                return CardEffectResult.Applied;
             #endregion
 
             default:
@@ -1250,17 +1284,17 @@ public class CardEffectManager : NetworkBehaviour
         int resourceRoll = Random.Range(0, 5);
         if (resourceRoll == 0)
         {
-            player.AddScore(1);
+            AddLateranoScore(player, "30001", 1);
             return;
         }
 
         if (resourceRoll <= 2)
         {
-            player.AddMana(1);
+            AddLateranoMana(player, "30001", 1);
             return;
         }
 
-        player.AddAttack(1);
+        AddLateranoAttack(player, "30001", 1);
     }
 
     [Server]
@@ -1404,7 +1438,7 @@ public class CardEffectManager : NetworkBehaviour
     }
 
     [Server]
-    private void ApplyLateranoChoiceEffect(PlayerState player, int choiceIndex)
+    public void ApplyLateranoChoiceEffect(PlayerState player, string sourceCardId, int choiceIndex)
     {
         if (player == null)
             return;
@@ -1412,13 +1446,56 @@ public class CardEffectManager : NetworkBehaviour
         switch (choiceIndex)
         {
             case 0:
-                player.AddMana(2);
+                AddLateranoMana(player, sourceCardId, 2);
                 return;
 
             case 1:
-                player.AddAttack(2);
+                AddLateranoAttack(player, sourceCardId, 2);
                 return;
         }
+    }
+
+    [Server]
+    private void AddLateranoMana(PlayerState player, string sourceCardId, int baseAmount)
+    {
+        if (player == null)
+            return;
+
+        int finalAmount = GetModifiedStatusResourceGain(player, sourceCardId, StatusResourceType.Mana, baseAmount);
+        player.AddMana(finalAmount);
+    }
+
+    [Server]
+    private void AddLateranoAttack(PlayerState player, string sourceCardId, int baseAmount)
+    {
+        if (player == null)
+            return;
+
+        int finalAmount = GetModifiedStatusResourceGain(player, sourceCardId, StatusResourceType.Attack, baseAmount);
+        player.AddAttack(finalAmount);
+    }
+
+    [Server]
+    private void AddLateranoScore(PlayerState player, string sourceCardId, int baseAmount)
+    {
+        if (player == null)
+            return;
+
+        int finalAmount = GetModifiedStatusResourceGain(player, sourceCardId, StatusResourceType.Score, baseAmount);
+        player.AddScore(finalAmount);
+    }
+
+    [Server]
+    private int GetModifiedStatusResourceGain(PlayerState player, string sourceCardId, StatusResourceType resourceType, int baseAmount)
+    {
+        if (player == null)
+            return baseAmount;
+        if (baseAmount <= 0)
+            return baseAmount;
+        if (StatusEffectManager.Instance == null)
+            return baseAmount;
+
+        return StatusEffectManager.Instance.ModifyResourceGain(player, sourceCardId, resourceType, baseAmount);
     }
 
     [Server]
