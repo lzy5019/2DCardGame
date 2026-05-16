@@ -48,6 +48,8 @@ public class CardPreviewManager : MonoBehaviour
     private Vector2 keywordPanelBaseAnchoredPosition;
     private Coroutine keywordRevealCoroutine;
     private Coroutine derivedCardRevealCoroutine;
+    private UnityEngine.Object previewOwner;
+    private bool hideWhenRightMouseReleased;
 
     private void Awake()
     {
@@ -57,12 +59,34 @@ public class CardPreviewManager : MonoBehaviour
         HidePreview();
     }
 
+    private void Update()
+    {
+        if (previewCanvas == null || !previewCanvas.activeSelf)
+            return;
+
+        if (hideWhenRightMouseReleased && !Input.GetMouseButton(1))
+        {
+            HidePreview();
+            return;
+        }
+
+        if (!IsPreviewOwnerAlive())
+        {
+            HidePreview();
+        }
+    }
+
     public void ShowPreview(Sprite sprite)
     {
         ShowPreview(sprite, null);
     }
 
     public void ShowPreview(Sprite sprite, CardData cardData)
+    {
+        ShowPreview(sprite, cardData, null, false);
+    }
+
+    public void ShowPreview(Sprite sprite, CardData cardData, UnityEngine.Object owner, bool autoHideOnRightMouseRelease)
     {
         if (sprite == null)
             return;
@@ -80,6 +104,9 @@ public class CardPreviewManager : MonoBehaviour
             previewImage.enabled = true;
             previewImage.preserveAspect = true;
         }
+
+        previewOwner = owner;
+        hideWhenRightMouseReleased = autoHideOnRightMouseRelease;
 
         ResetKeywordPanelVisual();
         RebuildKeywordItems(cardData);
@@ -110,6 +137,9 @@ public class CardPreviewManager : MonoBehaviour
 
     public void HidePreview()
     {
+        previewOwner = null;
+        hideWhenRightMouseReleased = false;
+
         if (keywordRevealCoroutine != null)
         {
             StopCoroutine(keywordRevealCoroutine);
@@ -133,6 +163,16 @@ public class CardPreviewManager : MonoBehaviour
         {
             previewCanvas.SetActive(false);
         }
+    }
+
+    public void HidePreviewIfOwner(UnityEngine.Object owner)
+    {
+        if (owner == null)
+            return;
+        if (previewOwner != owner)
+            return;
+
+        HidePreview();
     }
 
     private void AutoBindIfNeeded()
@@ -431,6 +471,23 @@ public class CardPreviewManager : MonoBehaviour
         {
             legacyText.text = value;
         }
+    }
+
+    private bool IsPreviewOwnerAlive()
+    {
+        if (previewOwner == null)
+            return true;
+
+        if (previewOwner is Behaviour behaviour)
+            return behaviour.isActiveAndEnabled;
+
+        if (previewOwner is GameObject gameObject)
+            return gameObject.activeInHierarchy;
+
+        if (previewOwner is Component component)
+            return component.gameObject.activeInHierarchy;
+
+        return true;
     }
 
 }

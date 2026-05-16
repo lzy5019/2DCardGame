@@ -29,10 +29,13 @@ public class HandDisplayManager : MonoBehaviour
     private readonly List<PendingDrawCardView> pendingDrawCardViews = new List<PendingDrawCardView>();
     private readonly List<PendingIncomingHandExileEvent> pendingIncomingHandExileEvents = new List<PendingIncomingHandExileEvent>();
     private readonly List<PendingRemovedHandView> pendingRemovedHandViews = new List<PendingRemovedHandView>();
+    private readonly List<PendingLocalPlayRequest> pendingLocalPlayRequests = new List<PendingLocalPlayRequest>();
     #endregion
 
     private const float PendingDrawFxMatchTimeout = 12f;
     private const float PendingHandExileMatchTimeout = 0.5f;
+    private const float PendingLocalPlayRequestTimeout = 1.25f;
+    private int nextLocalPlayFxRequestId = 1;
 
     private sealed class PendingIncomingVisualEvent
     {
@@ -66,6 +69,15 @@ public class HandDisplayManager : MonoBehaviour
         public float expireTime;
     }
 
+    private sealed class PendingLocalPlayRequest
+    {
+        public int requestId;
+        public int handIndex;
+        public string cardId;
+        public Vector2 releaseScreenPosition;
+        public float expireTime;
+    }
+
     #region 生命周期
     private void Awake()
     {
@@ -94,7 +106,8 @@ public class HandDisplayManager : MonoBehaviour
         if (pendingIncomingVisualEvents.Count > 0 ||
             pendingDrawCardViews.Count > 0 ||
             pendingIncomingHandExileEvents.Count > 0 ||
-            pendingRemovedHandViews.Count > 0)
+            pendingRemovedHandViews.Count > 0 ||
+            pendingLocalPlayRequests.Count > 0)
         {
             CleanupPendingDrawFxState();
             TryProcessPendingHandExileFx();
@@ -130,6 +143,7 @@ public class HandDisplayManager : MonoBehaviour
         pendingIncomingVisualEvents.Clear();
         pendingDrawCardViews.Clear();
         pendingIncomingHandExileEvents.Clear();
+        pendingLocalPlayRequests.Clear();
 
         for (int i = 0; i < pendingRemovedHandViews.Count; i++)
         {
@@ -247,9 +261,11 @@ public class HandDisplayManager : MonoBehaviour
                pendingDrawCardViews.Count > 0 ||
                pendingIncomingHandExileEvents.Count > 0 ||
                pendingRemovedHandViews.Count > 0 ||
+               pendingLocalPlayRequests.Count > 0 ||
                HandCardDrawFxUI.IsBusy ||
                HandCardPileToHandFxUI.IsBusy ||
-               HandCardExileFxUI.IsBusy;
+               HandCardExileFxUI.IsBusy ||
+               HandCardPlayFxUI.IsBusy;
     }
 
     public void NotifyIncomingHandExileFx(int handIndex, string cardId)
@@ -264,6 +280,39 @@ public class HandDisplayManager : MonoBehaviour
         });
 
         TryProcessPendingHandExileFx();
+    }
+
+    public int BeginLocalPlayCardFx(string cardId, int handIndex, Vector2 releaseScreenPosition)
+    {
+        if (!ShouldUsePlayCardFx(cardId))
+            return -1;
+
+        CleanupPendingDrawFxState();
+
+        int requestId = nextLocalPlayFxRequestId++;
+        if (nextLocalPlayFxRequestId <= 0)
+        {
+            nextLocalPlayFxRequestId = 1;
+        }
+
+        pendingLocalPlayRequests.Add(new PendingLocalPlayRequest
+        {
+            requestId = requestId,
+            handIndex = handIndex,
+            cardId = cardId,
+            releaseScreenPosition = releaseScreenPosition,
+            expireTime = Time.unscaledTime + PendingLocalPlayRequestTimeout
+        });
+
+        return requestId;
+    }
+
+    public void NotifyPlayedCardResolveFx(int requestId, string cardId, PlayedCardResolveDestinationType destinationType)
+    {
+        if (requestId <= 0)
+            return;
+
+        HandCardPlayFxUI.NotifyResolved(requestId, cardId, destinationType);
     }
 
     public void RefreshHand()
@@ -514,6 +563,13 @@ public class HandDisplayManager : MonoBehaviour
 
         if (removedCardObj != null)
         {
+            if (TryConsumePendingLocalPlayRequest(handIndex, resolvedCardId, out PendingLocalPlayRequest playRequest))
+            {
+                StartQueuedPlayCardFx(playRequest.requestId, removedCardObj, resolvedCardId, playRequest.releaseScreenPosition);
+                UpdateHandLayout();
+                return;
+            }
+
             pendingRemovedHandViews.Add(new PendingRemovedHandView
             {
                 handIndex = handIndex,
@@ -591,6 +647,15 @@ public class HandDisplayManager : MonoBehaviour
             if (exileEvent == null || exileEvent.expireTime <= now)
             {
                 pendingIncomingHandExileEvents.RemoveAt(i);
+            }
+        }
+
+        for (int i = pendingLocalPlayRequests.Count - 1; i >= 0; i--)
+        {
+            PendingLocalPlayRequest playRequest = pendingLocalPlayRequests[i];
+            if (playRequest == null || playRequest.expireTime <= now)
+            {
+                pendingLocalPlayRequests.RemoveAt(i);
             }
         }
 
@@ -700,6 +765,33 @@ public class HandDisplayManager : MonoBehaviour
 
             removedView = candidate;
             pendingRemovedHandViews.RemoveAt(i);
+            return true;
+        }
+
+        return false;
+    }
+
+    private bool TryConsumePendingLocalPlayRequest(int handIndex, string cardId, out PendingLocalPlayRequest playRequest)
+    {
+        playRequest = null;
+
+        for (int i = 0; i < pendingLocalPlayRequests.Count; i++)
+        {
+            PendingLocalPlayRequest candidate = pendingLocalPlayRequests[i];
+            if (candidate == null)
+            {
+                pendingLocalPlayRequests.RemoveAt(i);
+                i--;
+                continue;
+            }
+
+            bool handIndexMatches = candidate.handIndex == handIndex;
+            bool cardIdMatches = string.IsNullOrEmpty(cardId) || candidate.cardId == cardId;
+            if (!handIndexMatches || !cardIdMatches)
+                continue;
+
+            playRequest = candidate;
+            pendingLocalPlayRequests.RemoveAt(i);
             return true;
         }
 
@@ -899,6 +991,25 @@ public class HandDisplayManager : MonoBehaviour
         return false;
     }
 
+    private bool StartQueuedPlayCardFx(int requestId, GameObject cardObj, string cardId, Vector2 releaseScreenPosition)
+    {
+        if (cardObj == null)
+            return false;
+        if (string.IsNullOrEmpty(cardId))
+        {
+            Destroy(cardObj);
+            return false;
+        }
+
+        bool started = HandCardPlayFxUI.TryBegin(requestId, cardObj, cardId, releaseScreenPosition);
+        if (!started && cardObj != null)
+        {
+            Destroy(cardObj);
+        }
+
+        return started;
+    }
+
     private void ConcealCardImmediately(GameObject cardObj)
     {
         if (cardObj == null)
@@ -965,6 +1076,18 @@ public class HandDisplayManager : MonoBehaviour
             cardUI.handIndex = handIndex;
             cardUI.cardId = cardId;
         }
+    }
+
+    private bool ShouldUsePlayCardFx(string cardId)
+    {
+        if (string.IsNullOrEmpty(cardId) || CardDatabase.Instance == null)
+            return false;
+
+        CardData cardData = CardDatabase.Instance.GetCardById(cardId);
+        if (cardData == null)
+            return false;
+
+        return cardData.cardType != CardType.Support && cardData.cardType != CardType.Weapon;
     }
     #endregion
 }

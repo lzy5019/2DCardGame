@@ -7,7 +7,8 @@ using System;
 public enum HandCardDrawFxMode
 {
     ToHand = 0,
-    ShowcaseThenDisappear = 1
+    ShowcaseThenDisappear = 1,
+    ShowcaseThenExile = 2
 }
 
 public enum HandCardDrawFxRequestType
@@ -28,6 +29,12 @@ public class HandCardDrawFxUI : MonoBehaviour
     [SerializeField] private float showcaseScaleMultiplier = 1.12f;
     [SerializeField] private RectTransform drawOriginOverride;
     [SerializeField] private RectTransform showcaseTargetOverride;
+    [Header("Showcase Exile FX")]
+    [SerializeField] private float holdBeforeExileDuration = 0.08f;
+    [SerializeField] private float exileDuration = 0.62f;
+    [SerializeField, Range(0.05f, 1f)] private float exileFadeStart = 0.78f;
+    [SerializeField] private Material exileMaterialTemplate;
+    [SerializeField] private string exileProgressPropertyName = "_ExileProgress";
     [Header("Reshuffle FX")]
     [SerializeField] private RectTransform reshuffleOriginOverride;
     [SerializeField] private RectTransform reshuffleTargetOverride;
@@ -285,7 +292,8 @@ public class HandCardDrawFxUI : MonoBehaviour
             "HandCardDrawOverlay",
             typeof(RectTransform),
             typeof(CanvasRenderer),
-            typeof(Image)
+            typeof(Image),
+            typeof(CanvasGroup)
         );
 
         RectTransform overlayRect = overlayObject.GetComponent<RectTransform>();
@@ -298,6 +306,11 @@ public class HandCardDrawFxUI : MonoBehaviour
         overlayImage.sprite = request.cardSprite;
         overlayImage.preserveAspect = true;
         overlayImage.raycastTarget = false;
+
+        CanvasGroup overlayCanvasGroup = overlayObject.GetComponent<CanvasGroup>();
+        overlayCanvasGroup.alpha = 1f;
+        overlayCanvasGroup.blocksRaycasts = false;
+        overlayCanvasGroup.interactable = false;
 
         Vector3 startScale = request.overlayStartScale;
         Vector3 showcaseScale = startScale * showcaseScaleMultiplier;
@@ -327,6 +340,51 @@ public class HandCardDrawFxUI : MonoBehaviour
             if (overlayObject != null)
             {
                 Destroy(overlayObject);
+            }
+
+            request.onResolved?.Invoke();
+            yield break;
+        }
+
+        if (request.mode == HandCardDrawFxMode.ShowcaseThenExile)
+        {
+            if (holdBeforeExileDuration > 0f)
+            {
+                yield return new WaitForSeconds(holdBeforeExileDuration);
+            }
+
+            Material runtimeMaterial = PrepareRuntimeMaterial();
+            if (runtimeMaterial != null)
+            {
+                overlayImage.material = runtimeMaterial;
+                runtimeMaterial.SetFloat(exileProgressPropertyName, 0f);
+            }
+
+            float exileElapsed = 0f;
+            while (exileElapsed < exileDuration)
+            {
+                exileElapsed += Time.deltaTime;
+                float t = Mathf.Clamp01(exileElapsed / Mathf.Max(exileDuration, 0.0001f));
+                float easedT = EaseInOutCubic(t);
+
+                if (runtimeMaterial != null)
+                {
+                    runtimeMaterial.SetFloat(exileProgressPropertyName, easedT);
+                }
+
+                float alphaFadeT = Mathf.InverseLerp(exileFadeStart, 1f, t);
+                overlayCanvasGroup.alpha = Mathf.Lerp(1f, 0f, alphaFadeT);
+                yield return null;
+            }
+
+            if (overlayObject != null)
+            {
+                Destroy(overlayObject);
+            }
+
+            if (runtimeMaterial != null)
+            {
+                Destroy(runtimeMaterial);
             }
 
             request.onResolved?.Invoke();
@@ -680,5 +738,28 @@ public class HandCardDrawFxUI : MonoBehaviour
         };
 
         return palette[UnityEngine.Random.Range(0, palette.Length)];
+    }
+
+    private Material PrepareRuntimeMaterial()
+    {
+        if (exileMaterialTemplate != null)
+        {
+            return Instantiate(exileMaterialTemplate);
+        }
+
+        Shader exileShader = Shader.Find("UI/ExileVoidShatter");
+        if (exileShader == null)
+            return null;
+
+        return new Material(exileShader);
+    }
+
+    private static float EaseInOutCubic(float t)
+    {
+        if (t < 0.5f)
+            return 4f * t * t * t;
+
+        float inverse = -2f * t + 2f;
+        return 1f - (inverse * inverse * inverse) / 2f;
     }
 }

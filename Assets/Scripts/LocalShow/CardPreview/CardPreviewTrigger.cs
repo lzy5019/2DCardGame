@@ -20,7 +20,7 @@ public class CardPreviewTrigger : MonoBehaviour, IPointerDownHandler, IPointerUp
         if (previewSprite == null)
             return;
 
-        CardPreviewManager.Instance.ShowPreview(previewSprite, previewCardData);
+        CardPreviewManager.Instance.ShowPreview(previewSprite, previewCardData, this, true);
     }
 
     public void OnPointerUp(PointerEventData eventData)
@@ -31,6 +31,22 @@ public class CardPreviewTrigger : MonoBehaviour, IPointerDownHandler, IPointerUp
             return;
 
         CardPreviewManager.Instance.HidePreview();
+    }
+
+    private void OnDisable()
+    {
+        if (CardPreviewManager.Instance == null)
+            return;
+
+        CardPreviewManager.Instance.HidePreviewIfOwner(this);
+    }
+
+    private void OnDestroy()
+    {
+        if (CardPreviewManager.Instance == null)
+            return;
+
+        CardPreviewManager.Instance.HidePreviewIfOwner(this);
     }
 
     private Sprite ResolvePreviewSprite(CardData previewCardData)

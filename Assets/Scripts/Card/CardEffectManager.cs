@@ -32,7 +32,7 @@ public class CardEffectManager : NetworkBehaviour
         switch (cardId)
         {
             case "19002":
-                return HandCardDrawFxMode.ShowcaseThenDisappear;
+                return HandCardDrawFxMode.ShowcaseThenExile;
 
             default:
                 return HandCardDrawFxMode.ToHand;
@@ -466,7 +466,7 @@ public class CardEffectManager : NetworkBehaviour
             }
 
             case "10010":   // 塞雷娅
-                TryAddDerivedCardsToPlayerDeck(player, cardId, 1, true);
+                TryAddDerivedCardsToPlayerDeck(player, cardId, 1, true, true);
                 return CardEffectResult.Applied;
 
             case "19001":   // 神经损伤
@@ -722,6 +722,89 @@ public class CardEffectManager : NetworkBehaviour
             }
             #endregion
 
+            #region ----维多利亚----
+            case "40001":   // Miss.Christine
+                {
+                int validPlayerCount = GetSelectablePlayerCount();
+                int maxDiscardCount = Mathf.Min(validPlayerCount, player.handCardIds.Count);
+                if (maxDiscardCount <= 0)
+                    return CardEffectResult.Applied;
+
+                return BeginHandDiscardSelection(
+                    player,
+                    PendingSelectionType.VictoriaChristineDiscardHandCards,
+                    "选择至多弃置X张手牌",
+                    0,
+                    maxDiscardCount
+                );
+            }
+
+            case "40002":   // 格拉尼
+                player.AddAttack(2);
+                if (CountEquippedSupportCards(player) >= 3)
+                {
+                    player.AddScore(1);
+                }
+                return CardEffectResult.Applied;
+
+            case "40003":   // 酒神
+                return BeginAllPlayerSelection(
+                    player,
+                    PendingSelectionType.VictoriaChooseOnePlayerAddTwoDerivedCardsToDiscardTop,
+                    "选择1名玩家",
+                    1,
+                    1
+                );
+
+            case "40004":   // 洛洛
+                return MoveRandomSupportCardFromDrawPileToHand(player);
+
+            case "40005":   // 琴柳
+                player.AddMana(3);
+                return CardEffectResult.Applied;
+
+            case "40006":   // 白铁
+                {
+                if (!TryGetWeightedVictoriaDeviceCardId(cardId, out string derivedCardId))
+                    return CardEffectResult.Failed;
+
+                player.AddCardToOwned(derivedCardId);
+                return player.EnterGeneratedCardToHand(derivedCardId);
+            }
+
+            case "40007":   // 风笛
+                player.AddAttack(3);
+                if (StatusEffectManager.Instance == null)
+                    return CardEffectResult.Failed;
+                if (!StatusEffectManager.Instance.ApplyStatus(player, "81002"))
+                    return CardEffectResult.Failed;
+                return CardEffectResult.Applied;
+
+            case "40011":   // 维娜维多利亚
+                player.DrawCards(1);
+                if (CountEquippedSupportCards(player) >= 2)
+                {
+                    player.DrawCards(1);
+                }
+                if (CountEquippedSupportCards(player) >= 5)
+                {
+                    player.DrawCards(1);
+                }
+                if (CountEquippedSupportCards(player) >= 8)
+                {
+                    player.DrawCards(1);
+                }
+                return CardEffectResult.Applied;
+
+            case "40012":   // 死芒
+                if (StatusEffectManager.Instance == null)
+                    return CardEffectResult.Failed;
+                if (!StatusEffectManager.Instance.ApplyStatus(player, "81004"))
+                    return CardEffectResult.Failed;
+                return CardEffectResult.Applied;
+
+            #endregion
+
             #region ----敌人----
             case "90001":   // 赞助无人机
                 player.AddMana(2);
@@ -745,7 +828,7 @@ public class CardEffectManager : NetworkBehaviour
                     if (targetPlayer == null)
                         continue;
 
-                    TryAddDerivedCardsToPlayerDeck(targetPlayer, cardId, 1);
+                    TryAddDerivedCardsToPlayerDeck(targetPlayer, cardId, 1, false, true);
                 }
 
                 return CardEffectResult.Applied;
@@ -771,7 +854,7 @@ public class CardEffectManager : NetworkBehaviour
                 {
                 player.AddScore(5);
 
-                TryAddDerivedCardsToPlayerDeck(player, cardId, 2);
+                TryAddDerivedCardsToPlayerDeck(player, cardId, 2, false, true);
                 return CardEffectResult.Applied;
             }
 
@@ -929,7 +1012,7 @@ public class CardEffectManager : NetworkBehaviour
         }
     }
 
-    [Server]    // 使用场地
+    [Server]    // 使用支援牌
     public CardEffectResult ResolveEquipUseEffect(int playerIndex, string cardId, int equipmentIndex)
     {
         if (!TryGetPlayer(playerIndex, out PlayerState player))
@@ -937,6 +1020,181 @@ public class CardEffectManager : NetworkBehaviour
 
         switch (cardId)
         {
+            case "21001":   // 阿戈尔示波器
+                {
+                if (equipmentIndex < 0)
+                    return CardEffectResult.Failed;
+                if (!player.SpendMana(2))
+                {
+                    player.ShowHintToOwner("费用不足");
+                    return CardEffectResult.Failed;
+                }
+                if (!player.SetEquipmentUsed(equipmentIndex, true))
+                    return CardEffectResult.Failed;
+
+                return BeginDiscardPileBanishSelection(
+                    player,
+                    PendingSelectionType.BanishOneDiscardPileCard,
+                    "选择弃牌堆1张卡放逐",
+                    1
+                );
+            }
+
+            case "21002":   // 小帮手
+                {
+                if (equipmentIndex < 0)
+                    return CardEffectResult.Failed;
+                if (!player.SetEquipmentUsed(equipmentIndex, true))
+                    return CardEffectResult.Failed;
+
+                return BeginRandomDiscardPileBanishSelection(
+                    player,
+                    PendingSelectionType.BanishUpToThreeRandomDiscardPileCardsGainAttack,
+                    "随机查看弃牌堆至多3张卡，可选择放逐",
+                    3
+                );
+            }
+
+            case "21003":   // 阿戈尔重刃
+                {
+                if (equipmentIndex < 0)
+                    return CardEffectResult.Failed;
+                if (!player.SetEquipmentUsed(equipmentIndex, true))
+                    return CardEffectResult.Failed;
+
+                player.AddAttack(3);
+                return CardEffectResult.Applied;
+            }
+
+            case "40008":   // 维式重锤
+                {
+                if (equipmentIndex < 0)
+                    return CardEffectResult.Failed;
+                if (!player.SetEquipmentUsed(equipmentIndex, true))
+                    return CardEffectResult.Failed;
+
+                return BeginCenterCardSelection(
+                    player,
+                    PendingSelectionType.VictoriaTransformOneCenterCardToRandomVictoria,
+                    "选择中场1张卡",
+                    1,
+                    1
+                );
+            }
+
+            case "40009":   // 伦蒂尼姆
+                {
+                if (equipmentIndex < 0)
+                    return CardEffectResult.Failed;
+                if (!player.SetEquipmentUsed(equipmentIndex, true))
+                    return CardEffectResult.Failed;
+
+                int supportCount = Mathf.Min(12, CountEquippedSupportCards(player));
+                player.AddAttack(supportCount);
+                return CardEffectResult.Applied;
+            }
+
+            case "40010":   // 维多利亚军粮
+                {
+                if (equipmentIndex < 0)
+                    return CardEffectResult.Failed;
+                if (StatusEffectManager.Instance == null)
+                    return CardEffectResult.Failed;
+                if (!player.SetEquipmentUsed(equipmentIndex, true))
+                    return CardEffectResult.Failed;
+                if (!StatusEffectManager.Instance.ApplyStatus(player, "81003"))
+                    return CardEffectResult.Failed;
+
+                return CardEffectResult.Applied;
+            }
+
+            case "400061":  // 极致火力
+                {
+                if (equipmentIndex < 0)
+                    return CardEffectResult.Failed;
+
+                player.AddAttack(2);
+                CardEffectResult banishResult = player.BanishEquippedCardByIndex(equipmentIndex, out _);
+                return banishResult == CardEffectResult.Failed ? CardEffectResult.Failed : CardEffectResult.Applied;
+            }
+
+            case "400062":  // 高效补给
+                {
+                if (equipmentIndex < 0)
+                    return CardEffectResult.Failed;
+
+                player.AddMana(2);
+                CardEffectResult banishResult = player.BanishEquippedCardByIndex(equipmentIndex, out _);
+                return banishResult == CardEffectResult.Failed ? CardEffectResult.Failed : CardEffectResult.Applied;
+            }
+
+            case "400063":  // 铁钳号
+                {
+                if (equipmentIndex < 0)
+                    return CardEffectResult.Failed;
+                if (player.attack < 5)
+                {
+                    player.ShowHintToOwner("攻击不足");
+                    return CardEffectResult.Failed;
+                }
+                if (!player.SpendAttack(5))
+                {
+                    player.ShowHintToOwner("攻击不足");
+                    return CardEffectResult.Failed;
+                }
+
+                CardEffectResult banishResult = player.BanishEquippedCardByIndex(equipmentIndex, out _);
+                if (banishResult == CardEffectResult.Failed)
+                    return CardEffectResult.Failed;
+
+                if (ShopState.Instance == null || CardDatabase.Instance == null)
+                    return CardEffectResult.Failed;
+
+                for (int slotIndex = ShopState.Instance.centerCardIds.Count - 1; slotIndex >= 0; slotIndex--)
+                {
+                    string centerCardId = ShopState.Instance.centerCardIds[slotIndex];
+                    if (string.IsNullOrEmpty(centerCardId))
+                        continue;
+                    if (centerCardId == "00000")
+                        continue;
+
+                    CardData centerCardData = CardDatabase.Instance.GetCardById(centerCardId);
+                    if (centerCardData == null || centerCardData.cardType != CardType.Enemy)
+                        continue;
+
+                    CardEffectResult defeatResult = player.DefeatCenterEnemyWithoutCost(slotIndex);
+                    if (defeatResult == CardEffectResult.Failed)
+                        return CardEffectResult.Failed;
+                    if (defeatResult == CardEffectResult.Pending)
+                        return CardEffectResult.Pending;
+                }
+
+                return CardEffectResult.Applied;
+            }
+
+            case "400121":  // 悲叹的仆役
+                {
+                if (equipmentIndex < 0)
+                    return CardEffectResult.Failed;
+
+                if (CountEquippedSupportCards(player) >= 2)
+                {
+                    player.AddScore(1);
+                }
+
+                CardEffectResult banishResult = player.BanishEquippedCardByIndex(equipmentIndex, out _);
+                if (banishResult == CardEffectResult.Failed)
+                    return CardEffectResult.Failed;
+
+                return BeginAllPlayerSelection(
+                    player,
+                    PendingSelectionType.VictoriaChooseOnePlayerDiscardSupport,
+                    "选择1名玩家",
+                    1,
+                    1
+                );
+            }
+
             default:
                 return CardEffectResult.Failed;
         }
@@ -1112,6 +1370,328 @@ public class CardEffectManager : NetworkBehaviour
             title,
             clampedTargetCount,
             clampedTargetCount,
+            optionCardIds,
+            optionPayloads
+        );
+
+        return CardEffectResult.Pending;
+    }
+
+    [Server]
+    private CardEffectResult BeginHandDiscardSelection(
+        PlayerState player,
+        PendingSelectionType selectionType,
+        string title,
+        int minCount,
+        int maxCount)
+    {
+        if (player == null || CardDatabase.Instance == null)
+            return CardEffectResult.Failed;
+
+        List<string> optionCardIds = new List<string>();
+        List<int> optionPayloads = new List<int>();
+
+        for (int i = 0; i < player.handCardIds.Count; i++)
+        {
+            string handCardId = player.handCardIds[i];
+            if (string.IsNullOrEmpty(handCardId))
+                continue;
+
+            CardData handCardData = CardDatabase.Instance.GetCardById(handCardId);
+            if (handCardData == null || handCardData.cardSprite == null)
+                continue;
+
+            optionCardIds.Add(handCardId);
+            optionPayloads.Add(i);
+        }
+
+        if (optionCardIds.Count == 0)
+            return CardEffectResult.Applied;
+
+        int clampedMinCount = Mathf.Clamp(minCount, 0, optionCardIds.Count);
+        int clampedMaxCount = Mathf.Clamp(maxCount, clampedMinCount, optionCardIds.Count);
+        player.BeginSelection(
+            selectionType,
+            title,
+            clampedMinCount,
+            clampedMaxCount,
+            optionCardIds,
+            optionPayloads
+        );
+
+        return CardEffectResult.Pending;
+    }
+
+    [Server]
+    public CardEffectResult BeginAllPlayerSelection(
+        PlayerState player,
+        PendingSelectionType selectionType,
+        string title,
+        int minCount,
+        int maxCount)
+    {
+        if (player == null || MatchManager.Instance == null)
+            return CardEffectResult.Failed;
+
+        List<int> optionPlayerIndices = new List<int>();
+        List<int> optionPayloads = new List<int>();
+
+        for (int i = 0; i < MatchManager.Instance.playerList.Count; i++)
+        {
+            PlayerState targetPlayer = MatchManager.Instance.playerList[i];
+            if (targetPlayer == null)
+                continue;
+
+            optionPlayerIndices.Add(targetPlayer.playerIndex);
+            optionPayloads.Add(targetPlayer.playerIndex);
+        }
+
+        if (optionPlayerIndices.Count == 0)
+            return CardEffectResult.Applied;
+
+        int clampedMinCount = Mathf.Clamp(minCount, 0, optionPlayerIndices.Count);
+        int clampedMaxCount = Mathf.Clamp(maxCount, clampedMinCount, optionPlayerIndices.Count);
+        player.BeginPlayerSelection(
+            selectionType,
+            title,
+            clampedMinCount,
+            clampedMaxCount,
+            optionPlayerIndices,
+            optionPayloads
+        );
+
+        return CardEffectResult.Pending;
+    }
+
+    [Server]
+    private int GetSelectablePlayerCount()
+    {
+        if (MatchManager.Instance == null)
+            return 0;
+
+        int count = 0;
+        for (int i = 0; i < MatchManager.Instance.playerList.Count; i++)
+        {
+            if (MatchManager.Instance.playerList[i] != null)
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    [Server]
+    private bool TryGetWeightedVictoriaDeviceCardId(string sourceCardId, out string derivedCardId)
+    {
+        derivedCardId = "";
+
+        if (string.IsNullOrEmpty(sourceCardId))
+            return false;
+        if (CardDatabase.Instance == null)
+            return false;
+
+        CardData sourceCardData = CardDatabase.Instance.GetCardById(sourceCardId);
+        if (sourceCardData == null || sourceCardData.derivedCards == null || sourceCardData.derivedCards.Count < 3)
+            return false;
+
+        CardData firstDerivedCardData = sourceCardData.derivedCards[0];
+        CardData secondDerivedCardData = sourceCardData.derivedCards[1];
+        CardData thirdDerivedCardData = sourceCardData.derivedCards[2];
+        if (firstDerivedCardData == null || string.IsNullOrEmpty(firstDerivedCardData.cardId))
+            return false;
+        if (secondDerivedCardData == null || string.IsNullOrEmpty(secondDerivedCardData.cardId))
+            return false;
+        if (thirdDerivedCardData == null || string.IsNullOrEmpty(thirdDerivedCardData.cardId))
+            return false;
+
+        int roll = Random.Range(0, 10);
+        if (roll < 5)
+        {
+            derivedCardId = firstDerivedCardData.cardId;
+        }
+        else if (roll < 9)
+        {
+            derivedCardId = secondDerivedCardData.cardId;
+        }
+        else
+        {
+            derivedCardId = thirdDerivedCardData.cardId;
+        }
+
+        return !string.IsNullOrEmpty(derivedCardId);
+    }
+
+    [Server]
+    public bool TryGetWeightedRandomSellableVictoriaCardId(out string victoriaCardId)
+    {
+        victoriaCardId = "";
+
+        if (CardDatabase.Instance == null)
+            return false;
+
+        List<CardData> candidatePool = new List<CardData>();
+        for (int i = 0; i < CardDatabase.Instance.allCards.Count; i++)
+        {
+            CardData candidate = CardDatabase.Instance.allCards[i];
+            if (!IsSellableVictoriaCard(candidate))
+                continue;
+
+            candidatePool.Add(candidate);
+        }
+
+        if (candidatePool.Count == 0)
+            return false;
+
+        while (true)
+        {
+            CardData candidate = candidatePool[Random.Range(0, candidatePool.Count)];
+            int cost = Mathf.Max(0, candidate.cost);
+            int totalWeight = 6 + cost;
+            if (Random.Range(0, totalWeight) < 6)
+            {
+                victoriaCardId = candidate.cardId;
+                return !string.IsNullOrEmpty(victoriaCardId);
+            }
+        }
+    }
+
+    [Server]
+    private int CountEquippedSupportCards(PlayerState player)
+    {
+        if (player == null || CardDatabase.Instance == null)
+            return 0;
+
+        int count = 0;
+        for (int i = 0; i < player.equippedCardIds.Count; i++)
+        {
+            string equippedCardId = player.equippedCardIds[i];
+            if (string.IsNullOrEmpty(equippedCardId))
+                continue;
+
+            CardData equippedCardData = CardDatabase.Instance.GetCardById(equippedCardId);
+            if (equippedCardData == null)
+                continue;
+            if (equippedCardData.cardType != CardType.Support)
+                continue;
+
+            count++;
+        }
+
+        return count;
+    }
+
+    private bool IsSellableVictoriaCard(CardData candidate)
+    {
+        if (candidate == null)
+            return false;
+        if (string.IsNullOrEmpty(candidate.cardId))
+            return false;
+        if (candidate.cardCategory != CardCategory.Victoria)
+            return false;
+        if (candidate.cardNum <= 0)
+            return false;
+        if (candidate.cardSprite == null)
+            return false;
+
+        return true;
+    }
+
+    [Server]
+    private CardEffectResult MoveRandomSupportCardFromDrawPileToHand(PlayerState player)
+    {
+        if (player == null || CardDatabase.Instance == null)
+            return CardEffectResult.Failed;
+
+        List<int> candidateDrawIndices = new List<int>();
+        for (int i = 0; i < player.drawPile.Count; i++)
+        {
+            string drawCardId = player.drawPile[i];
+            if (string.IsNullOrEmpty(drawCardId))
+                continue;
+
+            CardData drawCardData = CardDatabase.Instance.GetCardById(drawCardId);
+            if (drawCardData == null)
+                continue;
+            if (drawCardData.cardType != CardType.Support)
+                continue;
+
+            candidateDrawIndices.Add(i);
+        }
+
+        if (candidateDrawIndices.Count == 0)
+        {
+            player.ShowHintToOwner("抽牌堆没有可加入手牌的支援牌");
+            return CardEffectResult.Applied;
+        }
+
+        int selectedDrawIndex = candidateDrawIndices[Random.Range(0, candidateDrawIndices.Count)];
+        return player.MoveDrawPileCardToHandByIndex(selectedDrawIndex, out _);
+    }
+
+    [Server]
+    private CardEffectResult BeginRandomDiscardPileBanishSelection(
+        PlayerState player,
+        PendingSelectionType selectionType,
+        string title,
+        int previewCount)
+    {
+        if (player == null || CardDatabase.Instance == null)
+            return CardEffectResult.Failed;
+
+        List<int> candidateIndices = new List<int>();
+        for (int i = 0; i < player.discardPile.Count; i++)
+        {
+            string discardCardId = player.discardPile[i];
+            if (string.IsNullOrEmpty(discardCardId))
+                continue;
+
+            CardData discardCardData = CardDatabase.Instance.GetCardById(discardCardId);
+            if (discardCardData == null || discardCardData.cardSprite == null)
+                continue;
+
+            candidateIndices.Add(i);
+        }
+
+        if (candidateIndices.Count == 0)
+        {
+            player.ShowHintToOwner("弃牌堆没有可放逐的卡");
+            return CardEffectResult.Applied;
+        }
+
+        for (int i = candidateIndices.Count - 1; i > 0; i--)
+        {
+            int randomIndex = Random.Range(0, i + 1);
+            (candidateIndices[i], candidateIndices[randomIndex]) = (candidateIndices[randomIndex], candidateIndices[i]);
+        }
+
+        int clampedPreviewCount = Mathf.Clamp(previewCount, 1, candidateIndices.Count);
+        List<string> optionCardIds = new List<string>();
+        List<int> optionPayloads = new List<int>();
+
+        for (int i = 0; i < clampedPreviewCount; i++)
+        {
+            int discardIndex = candidateIndices[i];
+            string discardCardId = player.discardPile[discardIndex];
+            CardData discardCardData = CardDatabase.Instance.GetCardById(discardCardId);
+            if (discardCardData == null || discardCardData.cardSprite == null)
+                continue;
+
+            optionCardIds.Add(discardCardId);
+            optionPayloads.Add(discardIndex);
+        }
+
+        if (optionCardIds.Count == 0)
+        {
+            player.ShowHintToOwner("弃牌堆没有可放逐的卡");
+            return CardEffectResult.Applied;
+        }
+
+        player.BeginSelection(
+            selectionType,
+            title,
+            0,
+            optionCardIds.Count,
             optionCardIds,
             optionPayloads
         );
@@ -1589,7 +2169,7 @@ public class CardEffectManager : NetworkBehaviour
     }
 
     [Server]
-    public bool TryAddDerivedCardsToPlayerDeck(PlayerState targetPlayer, string sourceCardId, int repeatCount, bool addToDiscardTop = false)
+    public bool TryAddDerivedCardsToPlayerDeck(PlayerState targetPlayer, string sourceCardId, int repeatCount, bool addToDiscardTop = false, bool playGeneratedToDiscardFx = false)
     {
         if (targetPlayer == null)
             return false;
@@ -1612,15 +2192,10 @@ public class CardEffectManager : NetworkBehaviour
                 if (derivedCardData == null || string.IsNullOrEmpty(derivedCardData.cardId))
                     continue;
 
-                targetPlayer.AddCardToOwned(derivedCardData.cardId);
-                if (addToDiscardTop)
-                {
-                    targetPlayer.AddCardToDiscardTop(derivedCardData.cardId);
-                }
-                else
-                {
-                    targetPlayer.AddCardToDiscard(derivedCardData.cardId);
-                }
+                CardEffectResult gainResult = targetPlayer.GainOwnedCard(derivedCardData.cardId, addToDiscardTop, playGeneratedToDiscardFx);
+                if (gainResult == CardEffectResult.Failed)
+                    continue;
+
                 addedAny = true;
             }
         }

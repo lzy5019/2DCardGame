@@ -158,17 +158,16 @@ MonoBehaviour:
   syncMode: 0
   syncInterval: 0
   startCards:
-  - 30001
-  - 30001
-  - 30002
-  - 30003
-  - 30004
-  - 30005
-  - 30007
-  - 30008
-  - 30009
-  - 30006
-  - 000000
+  - 00001
+  - 00001
+  - 00001
+  - 00001
+  - 00001
+  - 00001
+  - 00001
+  - 00001
+  - 00002
+  - 00002
   gameStarted: 0
   currentTurnPlayerIndex: -1
   waitingForPublicActionDrain: 0
@@ -2691,6 +2690,10 @@ GameObject:
   - component: {fileID: 313759212}
   - component: {fileID: 313759215}
   - component: {fileID: 313759216}
+  - component: {fileID: 313759217}
+  - component: {fileID: 313759218}
+  - component: {fileID: 313759219}
+  - component: {fileID: 313759220}
   m_Layer: 0
   m_Name: Action FX
   m_TagString: Untagged
@@ -2736,6 +2739,11 @@ MonoBehaviour:
   showcaseScaleMultiplier: 1.2
   drawOriginOverride: {fileID: 671705077}
   showcaseTargetOverride: {fileID: 277840266}
+  holdBeforeExileDuration: 0.08
+  exileDuration: 0.62
+  exileFadeStart: 0.78
+  exileMaterialTemplate: {fileID: 0}
+  exileProgressPropertyName: _ExileProgress
   reshuffleOriginOverride: {fileID: 349201970}
   reshuffleTargetOverride: {fileID: 671705077}
   minReshuffleSparkCount: 100
@@ -2753,8 +2761,8 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: -60.843296, y: 15.626473, z: -9875.695}
-  m_LocalScale: {x: 108, y: 108, z: 108}
-  m_ConstrainProportionsScale: 0
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 1
   m_Children: []
   m_Father: {fileID: 1572786334}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -2800,9 +2808,106 @@ MonoBehaviour:
   moveToHandDuration: 0.2
   showcaseScaleMultiplier: 1.2
   discardOriginOverride: {fileID: 349201970}
-  drawPileSearchOriginOverride: {fileID: 0}
-  generatedOriginOverride: {fileID: 0}
+  drawPileSearchOriginOverride: {fileID: 671705077}
+  generatedOriginOverride: {fileID: 1139133956}
   showcaseTargetOverride: {fileID: 64420381}
+--- !u!114 &313759217
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 313759211}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9edac84b013ec4b498b6039c8c11cc8f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  moveFromSourceDuration: 0.5
+  holdAtShowcaseDuration: 0.1
+  moveToDiscardDuration: 0.2
+  showcaseScaleMultiplier: 1.2
+  overlaySize: {x: 252, y: 352}
+  generatedOriginOverride: {fileID: 1139133956}
+  showcaseTargetOverride: {fileID: 64420381}
+  discardTargetOverride: {fileID: 349201970}
+--- !u!114 &313759218
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 313759211}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 612587a5e83974f44a7c4b4883af83ba, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  moveToCastDuration: 0.2
+  holdAtCastDuration: 0.1
+  moveToDestinationDuration: 0.2
+  castScaleMultiplier: 1.2
+  resolveEndScaleMultiplier: 0.3
+  castTargetOverride: {fileID: 64420381}
+  playedPileTargetOverride: {fileID: 1317705637}
+  drawPileTargetOverride: {fileID: 671705077}
+  discardPileTargetOverride: {fileID: 349201970}
+  banishDuration: 1
+  banishFadeStart: 0.78
+  exileMaterialTemplate: {fileID: 2100000, guid: 487727bcc1823b64794463b50f32d785, type: 2}
+  progressPropertyName: _ExileProgress
+--- !u!114 &313759219
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 313759211}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0d54b6c73304cf7488c8adb7ba6a2842, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  moveToFocusDuration: 0.4
+  holdBeforeSwapDuration: 0.16
+  swapPulseDuration: 0.18
+  holdAfterSwapDuration: 0.16
+  moveBackDuration: 0.2
+  focusScaleMultiplier: 1.1
+  swapScaleMultiplier: 1.22
+  focusTargetOverride: {fileID: 1868853492}
+--- !u!114 &313759220
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 313759211}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a28495167b558f64b8b911311d137dd2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  spawnScale: 1
+  travelScale: 0.5
+  moveDurationMin: 0.3
+  moveDurationMax: 0.6
+  staggerInterval: 0.1
+  accelerationPhaseRatio: 0.539
+  spawnScatterRadius: 150
+  targetScatterRadius: 5
+  fadeOutStart: 0.88
+  spawnOriginOverride: {fileID: 64420381}
+  manaTargetOverride: {fileID: 1855097290}
+  attackTargetOverride: {fileID: 2045024555}
+  scoreTargetOverride: {fileID: 1696901952}
+  manaTokenPrefab: {fileID: 7181121243437805686, guid: 77e005c81a77b5049899e0b0d3790e12, type: 3}
+  attackTokenPrefab: {fileID: 5300916432226459027, guid: 456186282ae77b746a62d3100c79c042, type: 3}
+  scoreTokenPrefab: {fileID: 3866980712141829599, guid: cf3ba6047454db54cbee8e05c3b4138c, type: 3}
+  manaFallbackColor: {r: 0.2, g: 0.65, b: 1, a: 1}
+  attackFallbackColor: {r: 1, g: 0.32, b: 0.32, a: 1}
+  scoreFallbackColor: {r: 1, g: 0.88, b: 0.18, a: 1}
+  fallbackTokenSize: 22
 --- !u!1 &349201969
 GameObject:
   m_ObjectHideFlags: 0
@@ -3086,6 +3191,12 @@ MonoBehaviour:
   - effectId: 7
     title: "\u8FDE\u643A"
     description: "\u5F53\u672C\u56DE\u5408\u6253\u51FA\u7684\u4E0A\u4E00\u5F20\u724C\u4E0E\u6B64\u724C\u540C\u9635\u8425\uFF0C\u5219\u89E6\u53D1\u6548\u679C"
+  - effectId: 8
+    title: "\u5F03\u7F6E"
+    description: "\u5C06\u724C\u653E\u5728\u5F03\u724C\u5806\u9876"
+  - effectId: 9
+    title: "\u6B66\u88C5"
+    description: "\u5F53\u573A\u4E0A\u652F\u63F4\u724C\u6570\u91CF\u8FBE\u5230\u4E00\u5B9A\u8981\u6C42\u65F6\u89E6\u53D1"
   derivedCardRevealDelay: 0.4
   derivedCardSwitchInterval: 1
 --- !u!1 &352325348
@@ -6249,6 +6360,41 @@ RectTransform:
   m_CorrespondingSourceObject: {fileID: 3472548818130534347, guid: 3573bc1268adbb748b139f1a81b901ae, type: 3}
   m_PrefabInstance: {fileID: 1022090140}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &1139133955
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1139133956}
+  m_Layer: 5
+  m_Name: Generated
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &1139133956
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1139133955}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1572786334}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0.5, y: 0.5}
+  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchoredPosition: {x: 1094, y: 178}
+  m_SizeDelta: {x: 100, y: 100}
+  m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1 &1152648932
 GameObject:
   m_ObjectHideFlags: 0
@@ -8759,6 +8905,7 @@ RectTransform:
   - {fileID: 277840266}
   - {fileID: 64420381}
   - {fileID: 1868853492}
+  - {fileID: 1139133956}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}

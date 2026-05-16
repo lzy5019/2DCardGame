@@ -7,6 +7,7 @@
     Rhine,      // 莱茵生命
     Agor,       // 阿戈尔
     Laterano,   // 拉特兰
-    Default
+    Default,
+    Victoria    // 维多利亚
 }
 

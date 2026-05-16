@@ -112,7 +112,10 @@ public class ShopPanelUI : MonoBehaviour
 
     private void OnCenterCardSet(int index, string item)
     {
-        RefreshCenterShop();
+        if (TryPlayCenterTransformFx(index, item))
+            return;
+
+        RefreshCenterSlot(index);
     }
 
     private void OnCenterCardRemoved(int index, string item)
@@ -271,6 +274,18 @@ public class ShopPanelUI : MonoBehaviour
         return slotList[slotIndex];
     }
 
+    public bool TryGetSlotRect(int slotIndex, bool isBaseShop, out RectTransform slotRect)
+    {
+        slotRect = null;
+
+        ShopSlotUI targetSlot = GetTargetSlot(slotIndex, isBaseShop);
+        if (targetSlot == null)
+            return false;
+
+        slotRect = targetSlot.transform as RectTransform;
+        return slotRect != null;
+    }
+
     private IEnumerator PlayPurchaseFxAndDestroy(ShopPurchaseFxUI purchaseFx, Sprite cardSprite, RectTransform targetRect)
     {
         if (purchaseFx == null)
@@ -334,16 +349,55 @@ public class ShopPanelUI : MonoBehaviour
 
         for (int i = 0; i < centerSlots.Count; i++)
         {
-            string cardId = "";
-
-            if (i < shopState.centerCardIds.Count)
-            {
-                cardId = shopState.centerCardIds[i];
-            }
-
-            centerSlots[i].SetCard(cardId);
-            centerSlots[i].slotIndex = i;
+            RefreshCenterSlot(i);
         }
+    }
+
+    private void RefreshCenterSlot(int slotIndex)
+    {
+        if (shopState == null) return;
+        if (centerSlots == null || centerSlots.Count == 0) return;
+        if (slotIndex < 0 || slotIndex >= centerSlots.Count) return;
+
+        string cardId = "";
+        if (slotIndex < shopState.centerCardIds.Count)
+        {
+            cardId = shopState.centerCardIds[slotIndex];
+        }
+
+        centerSlots[slotIndex].SetCard(cardId);
+        centerSlots[slotIndex].slotIndex = slotIndex;
+    }
+
+    private bool TryPlayCenterTransformFx(int slotIndex, string oldCardId)
+    {
+        if (shopState == null)
+            return false;
+        if (centerSlots == null || centerSlots.Count == 0)
+            return false;
+        if (slotIndex < 0 || slotIndex >= centerSlots.Count)
+            return false;
+        if (slotIndex >= shopState.centerCardIds.Count)
+            return false;
+        if (string.IsNullOrEmpty(oldCardId))
+            return false;
+
+        string newCardId = shopState.centerCardIds[slotIndex];
+        if (string.IsNullOrEmpty(newCardId))
+            return false;
+
+        ShopSlotUI slot = centerSlots[slotIndex];
+        if (slot == null)
+            return false;
+
+        bool started = CenterCardTransformFxUI.TryPlay(
+            slot,
+            oldCardId,
+            newCardId,
+            () => RefreshCenterSlot(slotIndex)
+        );
+
+        return started;
     }
 
     private void RefreshBaseShop()

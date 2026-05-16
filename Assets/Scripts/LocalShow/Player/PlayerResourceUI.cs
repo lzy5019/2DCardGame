@@ -3,6 +3,8 @@ using UnityEngine;
 
 public class PlayerResourceUI : MonoBehaviour
 {
+    public static PlayerResourceUI Instance { get; private set; }
+
     #region 界面引用
     [Header("界面引用")]
     [SerializeField] private TMP_Text attackText;
@@ -13,6 +15,19 @@ public class PlayerResourceUI : MonoBehaviour
     #endregion
 
     #region 生命周期
+    private void Awake()
+    {
+        Instance = this;
+    }
+
+    private void OnDestroy()
+    {
+        if (Instance == this)
+        {
+            Instance = null;
+        }
+    }
+
     private void Update()
     {
         if (localPlayer == null)
@@ -22,7 +37,7 @@ public class PlayerResourceUI : MonoBehaviour
 
         if (localPlayer != null)
         {
-            SetData(localPlayer.attack, localPlayer.mana, localPlayer.GetDisplayedScore());
+            SetData(localPlayer.GetDisplayedAttack(), localPlayer.GetDisplayedMana(), localPlayer.GetDisplayedScore());
         }
     }
     #endregion
@@ -54,6 +69,21 @@ public class PlayerResourceUI : MonoBehaviour
 
         if (scoreText != null)
             scoreText.text = score.ToString();
+    }
+
+    public RectTransform GetAttackTargetRect()
+    {
+        return attackText != null ? attackText.rectTransform : null;
+    }
+
+    public RectTransform GetManaTargetRect()
+    {
+        return manaText != null ? manaText.rectTransform : null;
+    }
+
+    public RectTransform GetScoreTargetRect()
+    {
+        return scoreText != null ? scoreText.rectTransform : null;
     }
     #endregion
 }

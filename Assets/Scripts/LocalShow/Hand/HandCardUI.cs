@@ -195,7 +195,8 @@ public class HandCardUI : MonoBehaviour,
 
         if (IsInPlayArea())
         {
-            handDisplayManager.playerState.RequestPlayCard(handIndex);
+            int playFxRequestId = handDisplayManager.BeginLocalPlayCardFx(cardId, handIndex, eventData.position);
+            handDisplayManager.playerState.RequestPlayCard(handIndex, playFxRequestId);
         }
     }
     #endregion

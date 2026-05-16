@@ -16,6 +16,8 @@ public class PlayerListItemUI : MonoBehaviour
     private PlayerState targetPlayer;
     private float refreshTimer = 0f;
 
+    public int BoundPlayerIndex => targetPlayer != null ? targetPlayer.playerIndex : -1;
+
     private void Awake()
     {
         AutoAssignReferences();
@@ -47,14 +49,23 @@ public class PlayerListItemUI : MonoBehaviour
         AutoAssignReferences();
 
         nameText.text = targetPlayer.playerName;
-        manaText.text = targetPlayer.mana.ToString();
-        attackText.text = targetPlayer.attack.ToString();
+        manaText.text = targetPlayer.GetDisplayedMana().ToString();
+        attackText.text = targetPlayer.GetDisplayedAttack().ToString();
         scoreText.text = targetPlayer.GetDisplayedScore().ToString();
         handCardNumText.text = targetPlayer.GetDisplayedHandCount().ToString();
         if (highLight != null)
         {
             highLight.SetActive(targetPlayer.isMyTurn);
         }
+    }
+
+    public RectTransform GetNameTargetRect()
+    {
+        AutoAssignReferences();
+        if (nameText != null)
+            return nameText.rectTransform;
+
+        return transform as RectTransform;
     }
 
     private void AutoAssignReferences()

@@ -86,7 +86,11 @@ public class StatusEffectManager : NetworkBehaviour
         if (!TryCreateRuntimeState(statusCardId, out StatusRuntimeData runtimeData))
             return false;
 
-        GetOrCreateRuntimeStates(player).Add(runtimeData);
+        List<StatusRuntimeData> runtimeStates = GetOrCreateRuntimeStates(player);
+        if (TryExtendExistingDurationStatus(player, runtimeStates, runtimeData))
+            return true;
+
+        runtimeStates.Add(runtimeData);
         player.AddStatusCardId(statusCardId);
         player.AddStatusDisplayData(
             runtimeData.stackCount,
@@ -94,7 +98,7 @@ public class StatusEffectManager : NetworkBehaviour
             runtimeData.remainingAttackCleanse,
             runtimeData.remainingManaCleanse);
         ResolveStatusTrigger(player, runtimeData, StatusTriggerTiming.OnApply);
-        SyncRuntimeDataToPlayer(player, GetOrCreateRuntimeStates(player).Count - 1, runtimeData);
+        SyncRuntimeDataToPlayer(player, runtimeStates.Count - 1, runtimeData);
         return true;
     }
 
@@ -135,6 +139,19 @@ public class StatusEffectManager : NetworkBehaviour
             return 0;
 
         return player.GetStatusCardCount(statusCardId);
+    }
+
+    [Server]
+    public bool ShouldRedirectGainedCardToHand(PlayerState player, string cardId)
+    {
+        if (player == null)
+            return false;
+        if (string.IsNullOrEmpty(cardId))
+            return false;
+        if (!HasStatus(player, "81003"))
+            return false;
+
+        return IsVictoriaSupportCardId(cardId);
     }
 
     [Server]
@@ -272,6 +289,47 @@ public class StatusEffectManager : NetworkBehaviour
         return false;
     }
 
+    [Server]
+    public void HandleEnemyDefeated(PlayerState player, string enemyCardId, bool fromCenterShop)
+    {
+        if (player == null)
+            return;
+        if (string.IsNullOrEmpty(enemyCardId))
+            return;
+        if (!TryGetRuntimeStates(player, out List<StatusRuntimeData> runtimeStates))
+            return;
+
+        for (int i = 0; i < runtimeStates.Count; i++)
+        {
+            StatusRuntimeData runtimeData = runtimeStates[i];
+            if (runtimeData == null)
+                continue;
+
+            switch (runtimeData.statusCardId)
+            {
+                case "81002":
+                    if (!fromCenterShop)
+                        continue;
+                    if (!IsEnemyCardId(enemyCardId))
+                        continue;
+                    if (enemyCardId == "00000")
+                        continue;
+
+                    player.AddScore(1);
+                    break;
+
+                case "81004":
+                    if (!IsEnemyCardId(enemyCardId))
+                        continue;
+                    if (CardEffectManager.Instance == null)
+                        continue;
+
+                    CardEffectManager.Instance.TryAddDerivedCardsToPlayerDeck(player, "81004", 1, true, true);
+                    break;
+            }
+        }
+    }
+
     private void ResolveStatusesForTiming(PlayerState player, StatusTriggerTiming timing)
     {
         if (player == null)
@@ -331,6 +389,33 @@ public class StatusEffectManager : NetworkBehaviour
         return runtimeStatesByPlayer.TryGetValue(player.playerIndex, out runtimeStates);
     }
 
+    private bool TryExtendExistingDurationStatus(PlayerState player, List<StatusRuntimeData> runtimeStates, StatusRuntimeData incomingRuntimeData)
+    {
+        if (player == null || runtimeStates == null || incomingRuntimeData == null)
+            return false;
+        if (incomingRuntimeData.durationTickTiming == StatusDurationTickTiming.None)
+            return false;
+        if (incomingRuntimeData.remainingTurns <= 0)
+            return false;
+
+        for (int i = runtimeStates.Count - 1; i >= 0; i--)
+        {
+            StatusRuntimeData existingRuntimeData = runtimeStates[i];
+            if (existingRuntimeData == null)
+                continue;
+            if (existingRuntimeData.statusCardId != incomingRuntimeData.statusCardId)
+                continue;
+            if (existingRuntimeData.durationTickTiming != incomingRuntimeData.durationTickTiming)
+                continue;
+
+            existingRuntimeData.remainingTurns += incomingRuntimeData.remainingTurns;
+            SyncRuntimeDataToPlayer(player, i, existingRuntimeData);
+            return true;
+        }
+
+        return false;
+    }
+
     private bool TryCreateRuntimeState(string statusCardId, out StatusRuntimeData runtimeData)
     {
         runtimeData = null;
@@ -357,6 +442,30 @@ public class StatusEffectManager : NetworkBehaviour
                     statusCardId,
                     stackCount: 1,
                     remainingTurns: 1,
+                    durationTickTiming: StatusDurationTickTiming.OnTurnEnd);
+                return true;
+
+            case "81002":
+                runtimeData = new StatusRuntimeData(
+                    statusCardId,
+                    stackCount: 1,
+                    remainingTurns: 1,
+                    durationTickTiming: StatusDurationTickTiming.OnTurnEnd);
+                return true;
+
+            case "81003":
+                runtimeData = new StatusRuntimeData(
+                    statusCardId,
+                    stackCount: 1,
+                    remainingTurns: 1,
+                    durationTickTiming: StatusDurationTickTiming.OnTurnEnd);
+                return true;
+
+            case "81004":
+                runtimeData = new StatusRuntimeData(
+                    statusCardId,
+                    stackCount: 1,
+                    remainingTurns: 2,
                     durationTickTiming: StatusDurationTickTiming.OnTurnEnd);
                 return true;
 
@@ -547,5 +656,34 @@ public class StatusEffectManager : NetworkBehaviour
             return false;
 
         return sourceCardData.cardCategory == targetCategory;
+    }
+
+    private bool IsEnemyCardId(string cardId)
+    {
+        if (string.IsNullOrEmpty(cardId))
+            return false;
+        if (CardDatabase.Instance == null)
+            return false;
+
+        CardData cardData = CardDatabase.Instance.GetCardById(cardId);
+        if (cardData == null)
+            return false;
+
+        return cardData.cardType == CardType.Enemy;
+    }
+
+    private bool IsVictoriaSupportCardId(string cardId)
+    {
+        if (string.IsNullOrEmpty(cardId))
+            return false;
+        if (CardDatabase.Instance == null)
+            return false;
+
+        CardData cardData = CardDatabase.Instance.GetCardById(cardId);
+        if (cardData == null)
+            return false;
+
+        return cardData.cardCategory == CardCategory.Victoria &&
+               cardData.cardType == CardType.Support;
     }
 }

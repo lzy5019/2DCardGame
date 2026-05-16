@@ -88,7 +88,7 @@ public class StatusItemUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandle
         if (cardData == null || cardData.cardSprite == null)
             return;
 
-        CardPreviewManager.Instance.ShowPreview(cardData.cardSprite, cardData);
+        CardPreviewManager.Instance.ShowPreview(cardData.cardSprite, cardData, this, true);
     }
 
     public void OnPointerUp(PointerEventData eventData)
@@ -99,6 +99,22 @@ public class StatusItemUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandle
             return;
 
         CardPreviewManager.Instance.HidePreview();
+    }
+
+    private void OnDisable()
+    {
+        if (CardPreviewManager.Instance == null)
+            return;
+
+        CardPreviewManager.Instance.HidePreviewIfOwner(this);
+    }
+
+    private void OnDestroy()
+    {
+        if (CardPreviewManager.Instance == null)
+            return;
+
+        CardPreviewManager.Instance.HidePreviewIfOwner(this);
     }
 
     private void SetOptionalCountDisplay(GameObject rootObject, TMP_Text textComponent, bool shouldShow, string valueText)
