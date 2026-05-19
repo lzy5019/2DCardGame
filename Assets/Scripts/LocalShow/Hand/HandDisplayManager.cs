@@ -58,6 +58,7 @@ public class HandDisplayManager : MonoBehaviour
     {
         public int handIndex;
         public string cardId;
+        public HandCardExileFxVisualType visualType;
         public float expireTime;
     }
 
@@ -268,7 +269,7 @@ public class HandDisplayManager : MonoBehaviour
                HandCardPlayFxUI.IsBusy;
     }
 
-    public void NotifyIncomingHandExileFx(int handIndex, string cardId)
+    public void NotifyIncomingHandExileFx(int handIndex, string cardId, HandCardExileFxVisualType visualType)
     {
         CleanupPendingDrawFxState();
 
@@ -276,6 +277,7 @@ public class HandDisplayManager : MonoBehaviour
         {
             handIndex = handIndex,
             cardId = cardId,
+            visualType = visualType,
             expireTime = Time.unscaledTime + PendingHandExileMatchTimeout
         });
 
@@ -722,7 +724,11 @@ public class HandDisplayManager : MonoBehaviour
                 return;
 
             pendingIncomingHandExileEvents.RemoveAt(0);
-            StartQueuedHandExileFx(removedView.cardObject, string.IsNullOrEmpty(exileEvent.cardId) ? removedView.cardId : exileEvent.cardId);
+            StartQueuedHandExileFx(
+                removedView.cardObject,
+                string.IsNullOrEmpty(exileEvent.cardId) ? removedView.cardId : exileEvent.cardId,
+                exileEvent.visualType
+            );
         }
     }
 
@@ -950,7 +956,7 @@ public class HandDisplayManager : MonoBehaviour
         return false;
     }
 
-    private bool StartQueuedHandExileFx(GameObject cardObj, string cardId)
+    private bool StartQueuedHandExileFx(GameObject cardObj, string cardId, HandCardExileFxVisualType visualType)
     {
         if (cardObj == null)
             return false;
@@ -961,7 +967,7 @@ public class HandDisplayManager : MonoBehaviour
             return false;
         }
 
-        bool queued = HandCardExileFxUI.TryQueueFromHand(cardObj, cardId, null, () =>
+        bool queued = HandCardExileFxUI.TryQueueFromHand(cardObj, cardId, visualType, null, () =>
         {
             if (cardObj != null)
             {

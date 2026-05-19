@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 85158e8fcd7d79a42abd350e02039e25, type: 3}
+  m_Name: "81005 \u8C03\u5EA6"
+  m_EditorClassIdentifier: 
+  cardId: 81005
+  cost: 0
+  scoreValue: 0
+  cardType: 7
+  cardCategory: 8
+  cardNum: -1
+  cardSprite: {fileID: 21300000, guid: 427941014aff26f4eb8bfe0c8e520923, type: 3}
+  playWav: {fileID: 0}
+  buyWav: {fileID: 0}
+  description: "\u6700\u591A\u4E09\u5C42\uFF0C\u88C5\u5907\u7EF4\u591A\u5229\u4E9A\u652F\u63F4\u724C\u65F6\uFF0C\u6D88\u8017\u4E00\u5C42\u5E76\u62BD\u4E00\u5F20\u724C"
+  derivedCards: []
+  effectId: 

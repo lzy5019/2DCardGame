@@ -76,6 +76,8 @@ public class PlayerState : NetworkBehaviour
     private bool hasPendingResourceGainVisualSource = false;
     private ResourceGainVisualSourceType pendingResourceGainVisualSourceType = ResourceGainVisualSourceType.Default;
     private int pendingResourceGainVisualSourceSlotIndex = -1;
+    private bool hasPendingResourceGainVisualDelay = false;
+    private ResourceGainVisualDelayType pendingResourceGainVisualDelayType = ResourceGainVisualDelayType.None;
     private readonly List<string> playedCardHistoryIds = new List<string>();
 
     #region 玩家初始化
@@ -117,6 +119,8 @@ public class PlayerState : NetworkBehaviour
         ResetPendingSelectionContext();
         ClearPendingPublicAction();
         ClearPendingPlayResolveContext();
+        ClearPendingResourceGainVisualSource();
+        ClearPendingResourceGainVisualDelay();
     }
     public override void OnStartServer()
     {
@@ -380,6 +384,32 @@ public class PlayerState : NetworkBehaviour
         pendingResourceGainVisualSourceSlotIndex = -1;
     }
 
+    private void BeginPendingResourceGainVisualDelay(ResourceGainVisualDelayType delayType)
+    {
+        hasPendingResourceGainVisualDelay = delayType != ResourceGainVisualDelayType.None;
+        pendingResourceGainVisualDelayType = delayType;
+    }
+
+    private void ClearPendingResourceGainVisualDelay()
+    {
+        hasPendingResourceGainVisualDelay = false;
+        pendingResourceGainVisualDelayType = ResourceGainVisualDelayType.None;
+    }
+
+    [Server]
+    public void BeginPendingHuiyouResourceVisualContext()
+    {
+        BeginPendingResourceGainVisualSource(ResourceGainVisualSourceType.DiscardPile, -1);
+        BeginPendingResourceGainVisualDelay(ResourceGainVisualDelayType.AfterCurrentResolveFx);
+    }
+
+    [Server]
+    public void ClearPendingHuiyouResourceVisualContext()
+    {
+        ClearPendingResourceGainVisualSource();
+        ClearPendingResourceGainVisualDelay();
+    }
+
     private void NotifyPendingPlayResolveIfNeeded()
     {
         if (pendingPlayResolveRequestId <= 0 || string.IsNullOrEmpty(pendingPlayResolveCardId))
@@ -502,16 +532,22 @@ public class PlayerState : NetworkBehaviour
     }
 
     [TargetRpc]
-    private void TargetNotifyIncomingHandExileFx(NetworkConnectionToClient target, int handIndex, string cardId)
+    private void TargetNotifyIncomingHandExileFx(NetworkConnectionToClient target, int handIndex, string cardId, int visualTypeRaw)
     {
         if (HandDisplayManager.Instance == null)
             return;
 
-        HandDisplayManager.Instance.NotifyIncomingHandExileFx(handIndex, cardId);
+        HandCardExileFxVisualType visualType = HandCardExileFxVisualType.Exile;
+        if (Enum.IsDefined(typeof(HandCardExileFxVisualType), visualTypeRaw))
+        {
+            visualType = (HandCardExileFxVisualType)visualTypeRaw;
+        }
+
+        HandDisplayManager.Instance.NotifyIncomingHandExileFx(handIndex, cardId, visualType);
     }
 
     [TargetRpc]
-    private void TargetPlayPileExileFx(NetworkConnectionToClient target, string cardId, int sourceTypeRaw)
+    private void TargetPlayPileExileFx(NetworkConnectionToClient target, string cardId, int sourceTypeRaw, int visualTypeRaw)
     {
         HandCardExileFxSource sourceType = HandCardExileFxSource.DiscardPile;
         if (Enum.IsDefined(typeof(HandCardExileFxSource), sourceTypeRaw))
@@ -519,10 +555,16 @@ public class PlayerState : NetworkBehaviour
             sourceType = (HandCardExileFxSource)sourceTypeRaw;
         }
 
+        HandCardExileFxVisualType visualType = HandCardExileFxVisualType.Exile;
+        if (Enum.IsDefined(typeof(HandCardExileFxVisualType), visualTypeRaw))
+        {
+            visualType = (HandCardExileFxVisualType)visualTypeRaw;
+        }
+
         if (sourceType == HandCardExileFxSource.Hand)
             return;
 
-        HandCardExileFxUI.TryQueueFromPile(cardId, sourceType);
+        HandCardExileFxUI.TryQueueFromPile(cardId, sourceType, visualType);
     }
 
     [TargetRpc]
@@ -541,7 +583,7 @@ public class PlayerState : NetworkBehaviour
     }
 
     [TargetRpc]
-    private void TargetNotifyIncomingResourceGainFx(NetworkConnectionToClient target, int resourceTypeRaw, int amount, int sourceTypeRaw, int sourceSlotIndex)
+    private void TargetNotifyIncomingResourceGainFx(NetworkConnectionToClient target, int resourceTypeRaw, int amount, int sourceTypeRaw, int sourceSlotIndex, int delayTypeRaw)
     {
         if (amount <= 0)
             return;
@@ -558,7 +600,13 @@ public class PlayerState : NetworkBehaviour
             sourceType = (ResourceGainVisualSourceType)sourceTypeRaw;
         }
 
-        StartCoroutine(CoNotifyIncomingResourceGainFx(resourceType, amount, sourceType, sourceSlotIndex));
+        ResourceGainVisualDelayType delayType = ResourceGainVisualDelayType.None;
+        if (Enum.IsDefined(typeof(ResourceGainVisualDelayType), delayTypeRaw))
+        {
+            delayType = (ResourceGainVisualDelayType)delayTypeRaw;
+        }
+
+        StartCoroutine(CoNotifyIncomingResourceGainFx(resourceType, amount, sourceType, sourceSlotIndex, delayType));
     }
 
     public int GetDisplayedDrawPileCount()
@@ -744,9 +792,27 @@ public class PlayerState : NetworkBehaviour
         }
     }
 
-    private IEnumerator CoNotifyIncomingResourceGainFx(ResourceGainVisualType resourceType, int amount, ResourceGainVisualSourceType sourceType, int sourceSlotIndex)
+    private IEnumerator CoNotifyIncomingResourceGainFx(ResourceGainVisualType resourceType, int amount, ResourceGainVisualSourceType sourceType, int sourceSlotIndex, ResourceGainVisualDelayType delayType)
     {
         yield return null;
+
+        if (delayType == ResourceGainVisualDelayType.AfterCurrentResolveFx)
+        {
+            const int waitForFxStartFrames = 6;
+            for (int i = 0; i < waitForFxStartFrames; i++)
+            {
+                if (HandCardPlayFxUI.IsBusy || HandCardExileFxUI.IsBusy)
+                    break;
+
+                yield return null;
+            }
+
+            float timeoutAt = Time.unscaledTime + 4f;
+            while (Time.unscaledTime < timeoutAt && (HandCardPlayFxUI.IsBusy || HandCardExileFxUI.IsBusy))
+            {
+                yield return null;
+            }
+        }
 
         NotifyLocalIncomingResourceVisual(resourceType, amount);
         bool queued = ResourceGainFxUI.TryQueue(this, resourceType, amount, sourceType, sourceSlotIndex);
@@ -774,7 +840,8 @@ public class PlayerState : NetworkBehaviour
                 (int)ResourceGainVisualType.Mana,
                 amount,
                 (int)(hasPendingResourceGainVisualSource ? pendingResourceGainVisualSourceType : ResourceGainVisualSourceType.Default),
-                hasPendingResourceGainVisualSource ? pendingResourceGainVisualSourceSlotIndex : -1
+                hasPendingResourceGainVisualSource ? pendingResourceGainVisualSourceSlotIndex : -1,
+                (int)(hasPendingResourceGainVisualDelay ? pendingResourceGainVisualDelayType : ResourceGainVisualDelayType.None)
             );
         }
     }
@@ -790,25 +857,34 @@ public class PlayerState : NetworkBehaviour
                 (int)ResourceGainVisualType.Attack,
                 amount,
                 (int)(hasPendingResourceGainVisualSource ? pendingResourceGainVisualSourceType : ResourceGainVisualSourceType.Default),
-                hasPendingResourceGainVisualSource ? pendingResourceGainVisualSourceSlotIndex : -1
+                hasPendingResourceGainVisualSource ? pendingResourceGainVisualSourceSlotIndex : -1,
+                (int)(hasPendingResourceGainVisualDelay ? pendingResourceGainVisualDelayType : ResourceGainVisualDelayType.None)
             );
         }
     }
     [Server]
-    public void AddScore(int amount)
+    public int AddScore(int amount)
     {
-        score += amount;
+        if (amount == 0)
+            return 0;
+        if (MatchManager.Instance == null)
+            return 0;
 
-        if (amount > 0 && connectionToClient != null)
+        int actualApplied = MatchManager.Instance.ApplyScoreChange(this, amount);
+
+        if (actualApplied > 0 && connectionToClient != null)
         {
             TargetNotifyIncomingResourceGainFx(
                 connectionToClient,
                 (int)ResourceGainVisualType.Score,
-                amount,
+                actualApplied,
                 (int)(hasPendingResourceGainVisualSource ? pendingResourceGainVisualSourceType : ResourceGainVisualSourceType.Default),
-                hasPendingResourceGainVisualSource ? pendingResourceGainVisualSourceSlotIndex : -1
+                hasPendingResourceGainVisualSource ? pendingResourceGainVisualSourceSlotIndex : -1,
+                (int)(hasPendingResourceGainVisualDelay ? pendingResourceGainVisualDelayType : ResourceGainVisualDelayType.None)
             );
         }
+
+        return actualApplied;
     }
 
     [Server]
@@ -1386,9 +1462,44 @@ public class PlayerState : NetworkBehaviour
         if (playedIndex < 0)
             return CardEffectResult.Failed;
 
-        MarkPendingPlayResolveDestination(cardId, PlayedCardResolveDestinationType.Banish);
+        if (IsPendingPlayResolveCard(cardId))
+        {
+            MarkPendingPlayResolveDestination(cardId, PlayedCardResolveDestinationType.Banish);
+        }
+        else if (connectionToClient != null)
+        {
+            HandCardExileFxVisualType visualType = GetBanishVisualType(cardId);
+            TargetPlayPileExileFx(connectionToClient, cardId, (int)HandCardExileFxSource.PlayedPile, (int)visualType);
+        }
+
         playedCardIds.RemoveAt(playedIndex);
         return AddCardToBanish(cardId);
+    }
+
+    [Server]
+    public void MarkPendingPlayResolveAsHuiyouDiscard(string cardId)
+    {
+        MarkPendingPlayResolveDestination(cardId, PlayedCardResolveDestinationType.HuiyouDiscardPile);
+    }
+
+    [Server]
+    private bool IsPendingPlayResolveCard(string cardId)
+    {
+        return pendingPlayResolveRequestId > 0 &&
+               !string.IsNullOrEmpty(cardId) &&
+               pendingPlayResolveCardId == cardId;
+    }
+
+    [Server]
+    private HandCardExileFxVisualType GetBanishVisualType(string cardId)
+    {
+        if (CardEffectManager.Instance != null &&
+            CardEffectManager.Instance.IsHuiyouBanishCard(cardId))
+        {
+            return HandCardExileFxVisualType.Huiyou;
+        }
+
+        return HandCardExileFxVisualType.Exile;
     }
 
     [Server]
@@ -1761,7 +1872,8 @@ public class PlayerState : NetworkBehaviour
 
         if (playExileFx && connectionToClient != null)
         {
-            TargetNotifyIncomingHandExileFx(connectionToClient, handIndex, cardId);
+            HandCardExileFxVisualType visualType = GetBanishVisualType(cardId);
+            TargetNotifyIncomingHandExileFx(connectionToClient, handIndex, cardId, (int)visualType);
         }
 
         handCardIds.RemoveAt(handIndex);
@@ -1861,7 +1973,8 @@ public class PlayerState : NetworkBehaviour
 
         if (connectionToClient != null)
         {
-            TargetPlayPileExileFx(connectionToClient, cardId, (int)HandCardExileFxSource.DiscardPile);
+            HandCardExileFxVisualType visualType = GetBanishVisualType(cardId);
+            TargetPlayPileExileFx(connectionToClient, cardId, (int)HandCardExileFxSource.DiscardPile, (int)visualType);
         }
 
         discardPile.RemoveAt(discardIndex);
@@ -1882,7 +1995,8 @@ public class PlayerState : NetworkBehaviour
 
         if (connectionToClient != null)
         {
-            TargetPlayPileExileFx(connectionToClient, cardId, (int)HandCardExileFxSource.DrawPile);
+            HandCardExileFxVisualType visualType = GetBanishVisualType(cardId);
+            TargetPlayPileExileFx(connectionToClient, cardId, (int)HandCardExileFxSource.DrawPile, (int)visualType);
         }
 
         drawPile.RemoveAt(drawIndex);

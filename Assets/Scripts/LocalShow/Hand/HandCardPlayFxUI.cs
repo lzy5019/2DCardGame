@@ -8,7 +8,8 @@ public enum PlayedCardResolveDestinationType
     PlayedPile = 0,
     DrawPile = 1,
     DiscardPile = 2,
-    Banish = 3
+    Banish = 3,
+    HuiyouDiscardPile = 4
 }
 
 public class HandCardPlayFxUI : MonoBehaviour
@@ -31,6 +32,12 @@ public class HandCardPlayFxUI : MonoBehaviour
     [SerializeField, Range(0.05f, 1f)] private float banishFadeStart = 0.78f;
     [SerializeField] private Material exileMaterialTemplate;
     [SerializeField] private string progressPropertyName = "_ExileProgress";
+
+    [Header("Huiyou Resolve FX")]
+    [SerializeField] private float huiyouDuration = 0.58f;
+    [SerializeField] private float huiyouHoldAfterWaveDuration = 0.06f;
+    [SerializeField] private Material huiyouMaterialTemplate;
+    [SerializeField] private string huiyouProgressPropertyName = "_ReturnProgress";
 
     private const float PendingResolveTimeout = 15f;
 
@@ -324,6 +331,10 @@ public class HandCardPlayFxUI : MonoBehaviour
         {
             yield return AnimateBanish(request);
         }
+        else if (request.destinationType == PlayedCardResolveDestinationType.HuiyouDiscardPile)
+        {
+            yield return AnimateHuiyou(request, castScale);
+        }
         else
         {
             Vector2 targetPosition = GetDestinationPosition(request.canvasRect, request.uiCamera, request.destinationType);
@@ -429,6 +440,65 @@ public class HandCardPlayFxUI : MonoBehaviour
         }
     }
 
+    private IEnumerator AnimateHuiyou(ActivePlayRequest request, Vector3 castScale)
+    {
+        if (request == null || request.overlayRect == null || request.overlayImage == null)
+            yield break;
+
+        Material runtimeMaterial = PrepareHuiyouRuntimeMaterial();
+        if (runtimeMaterial != null)
+        {
+            request.overlayImage.material = runtimeMaterial;
+            runtimeMaterial.SetFloat(huiyouProgressPropertyName, 0f);
+        }
+
+        float elapsed = 0f;
+        while (elapsed < huiyouDuration)
+        {
+            elapsed += Time.deltaTime;
+            float t = Mathf.Clamp01(elapsed / Mathf.Max(huiyouDuration, 0.0001f));
+            float easedT = EaseInOutCubic(t);
+
+            if (runtimeMaterial != null)
+            {
+                runtimeMaterial.SetFloat(huiyouProgressPropertyName, easedT);
+            }
+
+            if (request.overlayCanvasGroup != null)
+            {
+                request.overlayCanvasGroup.alpha = 1f;
+            }
+
+            yield return null;
+        }
+
+        if (huiyouHoldAfterWaveDuration > 0f)
+        {
+            yield return new WaitForSeconds(huiyouHoldAfterWaveDuration);
+        }
+
+        if (runtimeMaterial != null)
+        {
+            Destroy(runtimeMaterial);
+            request.overlayImage.material = null;
+        }
+
+        Vector2 targetPosition = GetDestinationPosition(
+            request.canvasRect,
+            request.uiCamera,
+            PlayedCardResolveDestinationType.DiscardPile
+        );
+        Vector3 endScale = request.startScale * resolveEndScaleMultiplier;
+        yield return AnimateOverlay(
+            request.overlayRect,
+            castScale,
+            endScale,
+            request.castPosition,
+            targetPosition,
+            moveToDestinationDuration,
+            request.overlayCanvasGroup);
+    }
+
     private void CleanupRequest(ActivePlayRequest request)
     {
         if (request == null)
@@ -493,6 +563,24 @@ public class HandCardPlayFxUI : MonoBehaviour
         return fallbackMaterial;
     }
 
+    private Material PrepareHuiyouRuntimeMaterial()
+    {
+        if (huiyouMaterialTemplate != null)
+        {
+            Material runtimeMaterial = new Material(huiyouMaterialTemplate);
+            runtimeMaterial.name = "Runtime Hand Play Huiyou";
+            return runtimeMaterial;
+        }
+
+        Shader huiyouShader = Shader.Find("UI/HuiyouTidalReturn");
+        if (huiyouShader == null)
+            return null;
+
+        Material fallbackMaterial = new Material(huiyouShader);
+        fallbackMaterial.name = "Runtime Hand Play Huiyou";
+        return fallbackMaterial;
+    }
+
     private Vector2 ResolveReleasePosition(RectTransform canvasRect, RectTransform sourceRect, Camera uiCamera, Vector2 releaseScreenPosition)
     {
         if (RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect, releaseScreenPosition, uiCamera, out Vector2 localPoint))
@@ -533,6 +621,7 @@ public class HandCardPlayFxUI : MonoBehaviour
                 break;
 
             case PlayedCardResolveDestinationType.DiscardPile:
+            case PlayedCardResolveDestinationType.HuiyouDiscardPile:
                 destinationRect = discardPileTargetOverride;
                 if (destinationRect == null && PileCountUI.Instance != null && PileCountUI.Instance.discardPileText != null)
                 {
@@ -552,6 +641,7 @@ public class HandCardPlayFxUI : MonoBehaviour
             case PlayedCardResolveDestinationType.DrawPile:
                 return new Vector2(-rect.width * 0.18f, -rect.height * 0.3f);
             case PlayedCardResolveDestinationType.DiscardPile:
+            case PlayedCardResolveDestinationType.HuiyouDiscardPile:
             default:
                 return new Vector2(-rect.width * 0.36f, -rect.height * 0.3f);
         }

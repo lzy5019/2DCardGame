@@ -12,6 +12,12 @@ public enum HandCardExileFxSource
     PlayedPile = 3
 }
 
+public enum HandCardExileFxVisualType
+{
+    Exile = 0,
+    Huiyou = 1
+}
+
 public class HandCardExileFxUI : MonoBehaviour
 {
     public static HandCardExileFxUI Instance;
@@ -31,6 +37,12 @@ public class HandCardExileFxUI : MonoBehaviour
     [SerializeField] private Material exileMaterialTemplate;
     [SerializeField] private string progressPropertyName = "_ExileProgress";
 
+    [Header("Huiyou FX")]
+    [SerializeField] private float huiyouDuration = 0.58f;
+    [SerializeField] private float huiyouHoldAfterWaveDuration = 0.06f;
+    [SerializeField] private Material huiyouMaterialTemplate;
+    [SerializeField] private string huiyouProgressPropertyName = "_ReturnProgress";
+
     private readonly Queue<ExileFxRequest> pendingRequests = new Queue<ExileFxRequest>();
     private Coroutine queueRoutine;
 
@@ -45,6 +57,7 @@ public class HandCardExileFxUI : MonoBehaviour
         public Vector2 targetPosition;
         public Vector2 overlaySize;
         public Vector3 startScale;
+        public HandCardExileFxVisualType visualType;
         public Action onStarted;
         public Action onResolved;
     }
@@ -78,6 +91,11 @@ public class HandCardExileFxUI : MonoBehaviour
 
     public static bool TryQueueFromHand(GameObject sourceCardObject, string cardId, Action onStarted = null, Action onResolved = null)
     {
+        return TryQueueFromHand(sourceCardObject, cardId, HandCardExileFxVisualType.Exile, onStarted, onResolved);
+    }
+
+    public static bool TryQueueFromHand(GameObject sourceCardObject, string cardId, HandCardExileFxVisualType visualType, Action onStarted = null, Action onResolved = null)
+    {
         if (sourceCardObject == null)
             return false;
 
@@ -85,7 +103,7 @@ public class HandCardExileFxUI : MonoBehaviour
         if (fx == null)
             return false;
 
-        ExileFxRequest request = fx.CreateHandRequest(sourceCardObject, cardId, onStarted, onResolved);
+        ExileFxRequest request = fx.CreateHandRequest(sourceCardObject, cardId, visualType, onStarted, onResolved);
         if (request == null)
             return false;
 
@@ -96,6 +114,11 @@ public class HandCardExileFxUI : MonoBehaviour
 
     public static bool TryQueueFromPile(string cardId, HandCardExileFxSource sourceType, Action onStarted = null, Action onResolved = null)
     {
+        return TryQueueFromPile(cardId, sourceType, HandCardExileFxVisualType.Exile, onStarted, onResolved);
+    }
+
+    public static bool TryQueueFromPile(string cardId, HandCardExileFxSource sourceType, HandCardExileFxVisualType visualType, Action onStarted = null, Action onResolved = null)
+    {
         if (sourceType == HandCardExileFxSource.Hand)
             return false;
 
@@ -103,7 +126,7 @@ public class HandCardExileFxUI : MonoBehaviour
         if (fx == null)
             return false;
 
-        ExileFxRequest request = fx.CreatePileRequest(cardId, sourceType, onStarted, onResolved);
+        ExileFxRequest request = fx.CreatePileRequest(cardId, sourceType, visualType, onStarted, onResolved);
         if (request == null)
             return false;
 
@@ -137,7 +160,7 @@ public class HandCardExileFxUI : MonoBehaviour
         }
     }
 
-    private ExileFxRequest CreateHandRequest(GameObject sourceCardObject, string cardId, Action onStarted, Action onResolved)
+    private ExileFxRequest CreateHandRequest(GameObject sourceCardObject, string cardId, HandCardExileFxVisualType visualType, Action onStarted, Action onResolved)
     {
         RectTransform sourceRect = sourceCardObject.GetComponent<RectTransform>();
         Image sourceImage = sourceCardObject.GetComponent<Image>();
@@ -179,12 +202,13 @@ public class HandCardExileFxUI : MonoBehaviour
             targetPosition = GetExileTargetPosition(canvasRect, uiCamera),
             overlaySize = sourceRect.rect.size,
             startScale = GetRelativeScale(sourceRect, canvasRect),
+            visualType = visualType,
             onStarted = onStarted,
             onResolved = onResolved
         };
     }
 
-    private ExileFxRequest CreatePileRequest(string cardId, HandCardExileFxSource sourceType, Action onStarted, Action onResolved)
+    private ExileFxRequest CreatePileRequest(string cardId, HandCardExileFxSource sourceType, HandCardExileFxVisualType visualType, Action onStarted, Action onResolved)
     {
         if (CardDatabase.Instance == null)
             return null;
@@ -214,6 +238,7 @@ public class HandCardExileFxUI : MonoBehaviour
             targetPosition = GetExileTargetPosition(canvasRect, uiCamera),
             overlaySize = defaultCardSize,
             startScale = Vector3.one,
+            visualType = visualType,
             onStarted = onStarted,
             onResolved = onResolved
         };
@@ -277,28 +302,40 @@ public class HandCardExileFxUI : MonoBehaviour
             yield return new WaitForSeconds(holdBeforeExileDuration);
         }
 
-        Material runtimeMaterial = PrepareRuntimeMaterial();
-        if (runtimeMaterial != null)
+        if (request.visualType == HandCardExileFxVisualType.Huiyou)
         {
-            overlayImage.material = runtimeMaterial;
-            runtimeMaterial.SetFloat(progressPropertyName, 0f);
+            yield return PlayHuiyouResolve(request, overlayRect, overlayImage, overlayCanvasGroup, travelScale);
         }
-
-        float elapsed = 0f;
-        while (elapsed < exileDuration)
+        else
         {
-            elapsed += Time.deltaTime;
-            float t = Mathf.Clamp01(elapsed / Mathf.Max(exileDuration, 0.0001f));
-            float easedT = EaseInOutCubic(t);
+            Material runtimeMaterial = PrepareRuntimeMaterial();
+            if (runtimeMaterial != null)
+            {
+                overlayImage.material = runtimeMaterial;
+                runtimeMaterial.SetFloat(progressPropertyName, 0f);
+            }
+
+            float elapsed = 0f;
+            while (elapsed < exileDuration)
+            {
+                elapsed += Time.deltaTime;
+                float t = Mathf.Clamp01(elapsed / Mathf.Max(exileDuration, 0.0001f));
+                float easedT = EaseInOutCubic(t);
+
+                if (runtimeMaterial != null)
+                {
+                    runtimeMaterial.SetFloat(progressPropertyName, easedT);
+                }
+
+                float alphaFadeT = Mathf.InverseLerp(endFadeStart, 1f, t);
+                overlayCanvasGroup.alpha = Mathf.Lerp(1f, 0f, alphaFadeT);
+                yield return null;
+            }
 
             if (runtimeMaterial != null)
             {
-                runtimeMaterial.SetFloat(progressPropertyName, easedT);
+                Destroy(runtimeMaterial);
             }
-
-            float alphaFadeT = Mathf.InverseLerp(endFadeStart, 1f, t);
-            overlayCanvasGroup.alpha = Mathf.Lerp(1f, 0f, alphaFadeT);
-            yield return null;
         }
 
         if (overlayObject != null)
@@ -306,12 +343,64 @@ public class HandCardExileFxUI : MonoBehaviour
             Destroy(overlayObject);
         }
 
+        request.onResolved?.Invoke();
+    }
+
+    private IEnumerator PlayHuiyouResolve(
+        ExileFxRequest request,
+        RectTransform overlayRect,
+        Image overlayImage,
+        CanvasGroup overlayCanvasGroup,
+        Vector3 travelScale)
+    {
+        Material runtimeMaterial = PrepareHuiyouRuntimeMaterial();
+        if (runtimeMaterial != null)
+        {
+            overlayImage.material = runtimeMaterial;
+            runtimeMaterial.SetFloat(huiyouProgressPropertyName, 0f);
+        }
+
+        float elapsed = 0f;
+        while (elapsed < huiyouDuration)
+        {
+            elapsed += Time.deltaTime;
+            float t = Mathf.Clamp01(elapsed / Mathf.Max(huiyouDuration, 0.0001f));
+            float easedT = EaseInOutCubic(t);
+
+            if (runtimeMaterial != null)
+            {
+                runtimeMaterial.SetFloat(huiyouProgressPropertyName, easedT);
+            }
+
+            overlayCanvasGroup.alpha = 1f;
+            yield return null;
+        }
+
+        if (huiyouHoldAfterWaveDuration > 0f)
+        {
+            yield return new WaitForSeconds(huiyouHoldAfterWaveDuration);
+        }
+
         if (runtimeMaterial != null)
         {
             Destroy(runtimeMaterial);
+            overlayImage.material = null;
         }
 
-        request.onResolved?.Invoke();
+        Vector2 discardTargetPosition = GetPileOriginPosition(
+            request.canvasRect,
+            request.uiCamera,
+            HandCardExileFxSource.DiscardPile);
+
+        yield return AnimateOverlay(
+            overlayRect,
+            request.targetPosition,
+            discardTargetPosition,
+            travelScale,
+            Vector3.one * 0.3f,
+            moveFromPileDuration);
+
+        overlayCanvasGroup.alpha = 0f;
     }
 
     private void ConcealSourceCard(GameObject sourceCardObject)
@@ -358,6 +447,24 @@ public class HandCardExileFxUI : MonoBehaviour
 
         Material fallbackMaterial = new Material(exileShader);
         fallbackMaterial.name = "Runtime Hand Exile Void Shatter";
+        return fallbackMaterial;
+    }
+
+    private Material PrepareHuiyouRuntimeMaterial()
+    {
+        if (huiyouMaterialTemplate != null)
+        {
+            Material runtimeMaterial = new Material(huiyouMaterialTemplate);
+            runtimeMaterial.name = "Runtime Hand Exile Huiyou";
+            return runtimeMaterial;
+        }
+
+        Shader huiyouShader = Shader.Find("UI/HuiyouTidalReturn");
+        if (huiyouShader == null)
+            return null;
+
+        Material fallbackMaterial = new Material(huiyouShader);
+        fallbackMaterial.name = "Runtime Hand Exile Huiyou";
         return fallbackMaterial;
     }
 

@@ -13,7 +13,14 @@ public enum ResourceGainVisualSourceType
 {
     Default = 0,
     CenterShopSlot = 1,
-    BaseShopSlot = 2
+    BaseShopSlot = 2,
+    DiscardPile = 3
+}
+
+public enum ResourceGainVisualDelayType
+{
+    None = 0,
+    AfterCurrentResolveFx = 1
 }
 
 public class ResourceGainFxUI : MonoBehaviour
@@ -190,6 +197,8 @@ public class ResourceGainFxUI : MonoBehaviour
     {
         if (TryResolveShopSlotContext(sourceType, sourceSlotIndex, out canvasRect, out uiCamera, out spawnPosition))
             return true;
+        if (TryResolvePileContext(sourceType, out canvasRect, out uiCamera, out spawnPosition))
+            return true;
 
         if (HandCardPlayFxUI.TryGetPrimaryCastContext(out canvasRect, out uiCamera, out spawnPosition) && canvasRect != null)
             return true;
@@ -216,6 +225,31 @@ public class ResourceGainFxUI : MonoBehaviour
             spawnPosition = new Vector2(0f, rect.height * 0.04f);
         }
 
+        return true;
+    }
+
+    private bool TryResolvePileContext(ResourceGainVisualSourceType sourceType, out RectTransform canvasRect, out Camera uiCamera, out Vector2 spawnPosition)
+    {
+        canvasRect = null;
+        uiCamera = null;
+        spawnPosition = Vector2.zero;
+
+        if (sourceType != ResourceGainVisualSourceType.DiscardPile)
+            return false;
+        if (PileCountUI.Instance == null || PileCountUI.Instance.discardPileText == null)
+            return false;
+
+        RectTransform discardRect = PileCountUI.Instance.discardPileText.rectTransform;
+        Canvas rootCanvas = GetRootCanvas(discardRect);
+        canvasRect = rootCanvas != null ? rootCanvas.transform as RectTransform : null;
+        uiCamera = rootCanvas != null && rootCanvas.renderMode != RenderMode.ScreenSpaceOverlay
+            ? rootCanvas.worldCamera
+            : null;
+
+        if (canvasRect == null)
+            return false;
+
+        spawnPosition = WorldToCanvasPosition(canvasRect, discardRect, uiCamera);
         return true;
     }
 

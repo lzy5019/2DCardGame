@@ -6,6 +6,7 @@ using UnityEngine.UI;
 public class PileBrowserUI : MonoBehaviour
 {
     public static PileBrowserUI Instance;
+    private static Dictionary<string, CardData> fallbackCardDataById;
 
     #region 界面引用
     [Header("核心引用")]
@@ -107,6 +108,13 @@ public class PileBrowserUI : MonoBehaviour
         pilePanel.gameObject.SetActive(true);
     }
 
+    public void OpenCustomPile(string title, IList<string> cardIds, PileDisplayOrder order = PileDisplayOrder.KeepOriginal)
+    {
+        List<string> source = cardIds != null ? new List<string>(cardIds) : new List<string>();
+        List<string> displayList = GetDisplayList(source, order);
+        OpenPile(title, displayList);
+    }
+
     public void ClosePile()
     {
         if (pilePanel != null)
@@ -141,13 +149,7 @@ public class PileBrowserUI : MonoBehaviour
             if (string.IsNullOrEmpty(cardId))
                 continue;
 
-            if (CardDatabase.Instance == null)
-            {
-                Debug.LogError("PileBrowserUI: CardDatabase.Instance is null.");
-                continue;
-            }
-
-            CardData cardData = CardDatabase.Instance.GetCardById(cardId);
+            CardData cardData = TryGetCardData(cardId);
 
             if (cardData == null)
             {
@@ -194,6 +196,53 @@ public class PileBrowserUI : MonoBehaviour
         }
 
         spawnedCards.Clear();
+    }
+
+    private CardData TryGetCardData(string cardId)
+    {
+        if (string.IsNullOrEmpty(cardId))
+            return null;
+
+        if (CardDatabase.Instance != null)
+        {
+            List<CardData> allCards = CardDatabase.Instance.allCards;
+            for (int i = 0; i < allCards.Count; i++)
+            {
+                CardData cardData = allCards[i];
+                if (cardData != null && cardData.cardId == cardId)
+                {
+                    return cardData;
+                }
+            }
+        }
+
+        EnsureFallbackCardCache();
+        if (fallbackCardDataById != null && fallbackCardDataById.TryGetValue(cardId, out CardData fallbackCardData))
+        {
+            return fallbackCardData;
+        }
+
+        return null;
+    }
+
+    private static void EnsureFallbackCardCache()
+    {
+        if (fallbackCardDataById != null)
+            return;
+
+        fallbackCardDataById = new Dictionary<string, CardData>();
+        CardData[] loadedCards = Resources.LoadAll<CardData>("Cards");
+        for (int i = 0; i < loadedCards.Length; i++)
+        {
+            CardData cardData = loadedCards[i];
+            if (cardData == null || string.IsNullOrEmpty(cardData.cardId))
+                continue;
+
+            if (!fallbackCardDataById.ContainsKey(cardData.cardId))
+            {
+                fallbackCardDataById.Add(cardData.cardId, cardData);
+            }
+        }
     }
     #endregion
 

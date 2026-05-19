@@ -39,6 +39,22 @@ public class CardEffectManager : NetworkBehaviour
         }
     }
 
+    [Server]
+    public bool IsHuiyouBanishCard(string cardId)
+    {
+        switch (cardId)
+        {
+            case "20003":
+            case "20005":
+            case "20008":
+            case "20009":
+                return true;
+
+            default:
+                return false;
+        }
+    }
+
     #region 卡牌效果
     [Server]    // 出牌+杀怪
     public CardEffectResult ResolveCardEffect(int playerIndex, string cardId)
@@ -803,6 +819,15 @@ public class CardEffectManager : NetworkBehaviour
                     return CardEffectResult.Failed;
                 return CardEffectResult.Applied;
 
+            case "40013":   // 澄闪
+                {
+                int repeatCount = CountEquippedSupportCards(player) >= 7 ? 3 : 2;
+                if (!TryAddDerivedCardsToPlayerDeck(player, cardId, repeatCount, true, true))
+                    return CardEffectResult.Failed;
+
+                return CardEffectResult.Applied;
+            }
+
             #endregion
 
             #region ----敌人----
@@ -855,6 +880,34 @@ public class CardEffectManager : NetworkBehaviour
                 player.AddScore(5);
 
                 TryAddDerivedCardsToPlayerDeck(player, cardId, 2, false, true);
+                return CardEffectResult.Applied;
+            }
+
+            case "48001":   // 浮游单元
+                {
+                int otherUnitCount = 0;
+                for (int i = 0; i < player.handCardIds.Count; i++)
+                {
+                    if (player.handCardIds[i] == "48001")
+                    {
+                        otherUnitCount++;
+                    }
+                }
+
+                if (otherUnitCount > 0)
+                {
+                    player.AddScore(otherUnitCount);
+                }
+
+                if (CountEquippedSupportCards(player) >= 4)
+                {
+                    CardEffectResult banishResult = player.BanishPlayedCardById(cardId);
+                    if (banishResult == CardEffectResult.Failed)
+                        return CardEffectResult.Failed;
+
+                    player.DrawCards(2);
+                }
+
                 return CardEffectResult.Applied;
             }
 
@@ -1845,11 +1898,19 @@ public class CardEffectManager : NetworkBehaviour
         if (banishIndex < 0)
             return CardEffectResult.Failed;
 
+        player.MarkPendingPlayResolveAsHuiyouDiscard(cardId);
         player.banishCardIds.RemoveAt(banishIndex);
         player.AddCardToOwned(cardId);
         player.AddCardToDiscard(cardId);
-
-        return ResolveCardEffect(playerIndex, cardId);
+        player.BeginPendingHuiyouResourceVisualContext();
+        try
+        {
+            return ResolveCardEffect(playerIndex, cardId);
+        }
+        finally
+        {
+            player.ClearPendingHuiyouResourceVisualContext();
+        }
     }
 
     [Server]

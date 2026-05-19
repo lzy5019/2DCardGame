@@ -15,7 +15,7 @@ MonoBehaviour:
   cardId: 300051
   cost: 4
   scoreValue: 2
-  cardType: 0
+  cardType: 11
   cardCategory: 6
   cardNum: -1
   cardSprite: {fileID: 21300000, guid: d731dbfc9b02442409de08a250bf8a2d, type: 3}

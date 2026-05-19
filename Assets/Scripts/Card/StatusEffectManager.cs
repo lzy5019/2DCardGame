@@ -611,7 +611,7 @@ public class StatusEffectManager : NetworkBehaviour
                 if (timing != StatusTriggerTiming.OnTurnStart)
                     return;
 
-                player.score = Mathf.Max(0, player.score - 1);
+                player.AddScore(-1);
                 return;
 
             default:
