@@ -8,6 +8,7 @@ using System;
 public class PlayerState : NetworkBehaviour
 {
     private const int MaxEquippedFieldCardCount = 25;
+    private const int TransientEquipmentHandleBase = 1000000;
     [Header("身份信息")]
     [SyncVar] public int playerIndex = -1;
     [SyncVar] public string playerName = "";
@@ -62,6 +63,8 @@ public class PlayerState : NetworkBehaviour
     private int pendingMinSelectCount = 1;
     private int pendingMaxSelectCount = 1;
     private int pendingTargetPlayerIndex = -1;
+    private int pendingProjectionWrenchMode = 0;
+    private int pendingTransientEquipmentInstanceId = -1;
     private string pendingEquipReplacementCardId = "";
     private int pendingEquipReplacementHandIndex = -1;
 
@@ -79,6 +82,9 @@ public class PlayerState : NetworkBehaviour
     private bool hasPendingResourceGainVisualDelay = false;
     private ResourceGainVisualDelayType pendingResourceGainVisualDelayType = ResourceGainVisualDelayType.None;
     private readonly List<string> playedCardHistoryIds = new List<string>();
+    private int nextTransientEquipmentInstanceId = 1;
+    private readonly List<int> transientEquipmentInstanceIds = new List<int>();
+    private readonly List<string> transientEquipmentCardIds = new List<string>();
 
     #region 玩家初始化
     [Server]
@@ -116,6 +122,10 @@ public class PlayerState : NetworkBehaviour
         ClearStatusCardIds();
         playedCardHistoryIds.Clear();
         StatusEffectManager.Instance?.ClearRuntimeStates(this);
+        transientEquipmentInstanceIds.Clear();
+        transientEquipmentCardIds.Clear();
+        nextTransientEquipmentInstanceId = 1;
+        pendingTransientEquipmentInstanceId = -1;
         ResetPendingSelectionContext();
         ClearPendingPublicAction();
         ClearPendingPlayResolveContext();
@@ -907,6 +917,9 @@ public class PlayerState : NetworkBehaviour
     [Server]
     public bool SetEquipmentUsed(int equipmentIndex, bool used)
     {
+        if (TryResolveTransientEquipmentIndex(equipmentIndex, out _))
+            return true;
+
         if (equipmentIndex < 0 || equipmentIndex >= equippedCardUsedFlags.Count)
             return false;
 
@@ -915,9 +928,49 @@ public class PlayerState : NetworkBehaviour
     }
 
     [Server]
+    public bool IsValidEquipmentHandle(int equipmentIndex)
+    {
+        if (TryResolveTransientEquipmentIndex(equipmentIndex, out _))
+            return true;
+
+        return equipmentIndex >= 0 && equipmentIndex < equippedCardIds.Count;
+    }
+
+    [Server]
     public void SetWeaponUsed(bool used)
     {
         equippedWeaponUsed = used;
+    }
+
+    [Server]
+    public CardEffectResult UseTransientEquipmentCopy(string cardId)
+    {
+        if (string.IsNullOrEmpty(cardId))
+            return CardEffectResult.Failed;
+        if (CardEffectManager.Instance == null)
+            return CardEffectResult.Failed;
+        if (!CreateTransientEquipmentCopy(cardId, out int transientInstanceId))
+            return CardEffectResult.Failed;
+
+        int transientHandle = EncodeTransientEquipmentHandle(transientInstanceId);
+        CardEffectResult effectResult = CardEffectManager.Instance.ResolveEquipUseEffect(playerIndex, cardId, transientHandle, false);
+        if (effectResult == CardEffectResult.Pending)
+        {
+            pendingTransientEquipmentInstanceId = transientInstanceId;
+            return CardEffectResult.Pending;
+        }
+
+        if (effectResult == CardEffectResult.Failed)
+        {
+            CleanupTransientEquipmentCopyIfStillPresent(transientInstanceId);
+            // Projection wrench should still finish resolving even if the copied
+            // support card cannot be activated due to insufficient resources.
+            // The copied transient equipment fizzles, then gets cleaned up.
+            return CardEffectResult.Applied;
+        }
+
+        CleanupTransientEquipmentCopyIfStillPresent(transientInstanceId);
+        return CardEffectResult.Applied;
     }
     #endregion
 
@@ -1336,6 +1389,10 @@ public class PlayerState : NetworkBehaviour
         ClearStatusCardIds();
         playedCardHistoryIds.Clear();
         StatusEffectManager.Instance?.ClearRuntimeStates(this);
+        transientEquipmentInstanceIds.Clear();
+        transientEquipmentCardIds.Clear();
+        nextTransientEquipmentInstanceId = 1;
+        pendingTransientEquipmentInstanceId = -1;
 
         if (startCards == null) return;
 
@@ -1692,6 +1749,18 @@ public class PlayerState : NetworkBehaviour
     public bool DiscardEquippedCardByIndex(int equipmentIndex, out string discardedCardId)
     {
         discardedCardId = "";
+        if (TryResolveTransientEquipmentIndex(equipmentIndex, out int transientIndex))
+        {
+            discardedCardId = transientEquipmentCardIds[transientIndex];
+            if (string.IsNullOrEmpty(discardedCardId))
+                return false;
+
+            RemoveTransientEquipmentAt(transientIndex);
+            discardPile.Add(discardedCardId);
+            CardEffectManager.Instance?.ResolveEquipLeaveToDiscardEffect(playerIndex, discardedCardId);
+            return true;
+        }
+
         if (equipmentIndex < 0 || equipmentIndex >= equippedCardIds.Count)
             return false;
 
@@ -1714,6 +1783,21 @@ public class PlayerState : NetworkBehaviour
     public CardEffectResult BanishEquippedCardByIndex(int equipmentIndex, out string banishedCardId)
     {
         banishedCardId = "";
+        if (TryResolveTransientEquipmentIndex(equipmentIndex, out int transientIndex))
+        {
+            banishedCardId = transientEquipmentCardIds[transientIndex];
+            if (string.IsNullOrEmpty(banishedCardId))
+                return CardEffectResult.Failed;
+
+            RemoveTransientEquipmentAt(transientIndex);
+            banishCardIds.Add(banishedCardId);
+
+            if (CardEffectManager.Instance == null)
+                return CardEffectResult.Applied;
+
+            return CardEffectManager.Instance.ResolveBanishEnterEffect(playerIndex, banishedCardId);
+        }
+
         if (equipmentIndex < 0 || equipmentIndex >= equippedCardIds.Count)
             return CardEffectResult.Failed;
 
@@ -1775,6 +1859,90 @@ public class PlayerState : NetworkBehaviour
 
         resolvedHandIndex = pendingEquipReplacementHandIndex;
         return true;
+    }
+
+    [Server]
+    private bool CreateTransientEquipmentCopy(string cardId, out int instanceId)
+    {
+        instanceId = -1;
+
+        if (string.IsNullOrEmpty(cardId))
+            return false;
+
+        instanceId = nextTransientEquipmentInstanceId++;
+        transientEquipmentInstanceIds.Add(instanceId);
+        transientEquipmentCardIds.Add(cardId);
+        AddCardToOwned(cardId);
+        return true;
+    }
+
+    [Server]
+    private bool TryResolveTransientEquipmentIndex(int equipmentIndex, out int transientIndex)
+    {
+        transientIndex = -1;
+        if (!IsTransientEquipmentHandle(equipmentIndex))
+            return false;
+
+        int instanceId = DecodeTransientEquipmentInstanceId(equipmentIndex);
+        transientIndex = FindTransientEquipmentIndexByInstanceId(instanceId);
+        return transientIndex >= 0;
+    }
+
+    [Server]
+    private void RemoveTransientEquipmentAt(int transientIndex)
+    {
+        if (transientIndex < 0 || transientIndex >= transientEquipmentInstanceIds.Count || transientIndex >= transientEquipmentCardIds.Count)
+            return;
+
+        transientEquipmentInstanceIds.RemoveAt(transientIndex);
+        transientEquipmentCardIds.RemoveAt(transientIndex);
+    }
+
+    [Server]
+    private void CleanupPendingTransientEquipmentCopy()
+    {
+        if (pendingTransientEquipmentInstanceId < 0)
+            return;
+
+        CleanupTransientEquipmentCopyIfStillPresent(pendingTransientEquipmentInstanceId);
+        pendingTransientEquipmentInstanceId = -1;
+    }
+
+    [Server]
+    private void CleanupTransientEquipmentCopyIfStillPresent(int instanceId)
+    {
+        int transientIndex = FindTransientEquipmentIndexByInstanceId(instanceId);
+        if (transientIndex < 0)
+            return;
+
+        int transientHandle = EncodeTransientEquipmentHandle(instanceId);
+        BanishEquippedCardByIndex(transientHandle, out _);
+    }
+
+    private bool IsTransientEquipmentHandle(int equipmentIndex)
+    {
+        return equipmentIndex <= -TransientEquipmentHandleBase;
+    }
+
+    private int EncodeTransientEquipmentHandle(int instanceId)
+    {
+        return -(TransientEquipmentHandleBase + instanceId);
+    }
+
+    private int DecodeTransientEquipmentInstanceId(int equipmentHandle)
+    {
+        return -equipmentHandle - TransientEquipmentHandleBase;
+    }
+
+    private int FindTransientEquipmentIndexByInstanceId(int instanceId)
+    {
+        for (int i = 0; i < transientEquipmentInstanceIds.Count; i++)
+        {
+            if (transientEquipmentInstanceIds[i] == instanceId)
+                return i;
+        }
+
+        return -1;
     }
 
     [Server]
@@ -2129,6 +2297,22 @@ public class PlayerState : NetworkBehaviour
             return;
 
         CmdRequestUseEquipment(equipmentIndex);
+    }
+
+    [Server]
+    public bool TriggerEquipmentUseByIndex(int equipmentIndex, bool consumeUsage)
+    {
+        if (equipmentIndex < 0 || equipmentIndex >= equippedCardIds.Count)
+            return false;
+
+        string cardId = equippedCardIds[equipmentIndex];
+        if (string.IsNullOrEmpty(cardId))
+            return false;
+        if (CardEffectManager.Instance == null)
+            return false;
+
+        CardEffectResult effectResult = CardEffectManager.Instance.ResolveEquipUseEffect(playerIndex, cardId, equipmentIndex, consumeUsage);
+        return HandleEffectResultForPublicAction(effectResult, cardId, PublicActionType.UseEquipment);
     }
 
     public void RequestUseStatus(string statusCardId)
@@ -3404,6 +3588,128 @@ public class PlayerState : NetworkBehaviour
                     selectionResolvedSuccessfully = true;
                     break;
                 }
+
+            case PendingSelectionType.VictoriaProjectionWrenchChooseMode:
+                {
+                    if (selectedPayloads.Length != 1)
+                        return;
+
+                    int mode = selectedPayloads[0];
+                    if (!pendingSelectionPayloads.Contains(mode))
+                        return;
+
+                    pendingProjectionWrenchMode = mode;
+
+                    CardEffectResult playerSelectionResult = CardEffectManager.Instance.BeginAllPlayerSelection(
+                        this,
+                        PendingSelectionType.VictoriaProjectionWrenchChoosePlayer,
+                        "选择1名玩家",
+                        1,
+                        1
+                    );
+                    if (playerSelectionResult != CardEffectResult.Pending)
+                        return;
+
+                    selectionContinues = true;
+                    break;
+                }
+
+            case PendingSelectionType.VictoriaProjectionWrenchChoosePlayer:
+                {
+                    if (selectedPayloads.Length != 1)
+                        return;
+
+                    int targetPlayerIndex = selectedPayloads[0];
+                    if (!pendingSelectionPayloads.Contains(targetPlayerIndex))
+                        return;
+                    if (!TryGetClientPlayerByIndex(targetPlayerIndex, out PlayerState targetPlayer))
+                        return;
+                    if (CardDatabase.Instance == null)
+                        return;
+
+                    pendingTargetPlayerIndex = targetPlayerIndex;
+
+                    List<string> optionCardIds = new List<string>();
+                    List<int> optionPayloads = new List<int>();
+
+                    for (int i = 0; i < targetPlayer.equippedCardIds.Count; i++)
+                    {
+                        string equippedCardId = targetPlayer.equippedCardIds[i];
+                        if (string.IsNullOrEmpty(equippedCardId))
+                            continue;
+
+                        CardData equippedCardData = CardDatabase.Instance.GetCardById(equippedCardId);
+                        if (equippedCardData == null || equippedCardData.cardSprite == null)
+                            continue;
+                        if (equippedCardData.cardType != CardType.Support)
+                            continue;
+
+                        optionCardIds.Add(equippedCardId);
+                        optionPayloads.Add(i);
+                    }
+
+                    if (optionCardIds.Count == 0)
+                    {
+                        ShowHintToOwner("目标没有可选择的支援牌");
+                        selectionResolvedSuccessfully = true;
+                        break;
+                    }
+
+                    string title = pendingProjectionWrenchMode == 1
+                        ? "选择1张支援牌并使用"
+                        : "选择1张支援牌弃置";
+
+                    BeginSelection(
+                        PendingSelectionType.VictoriaProjectionWrenchChooseTargetSupport,
+                        title,
+                        1,
+                        1,
+                        optionCardIds,
+                        optionPayloads
+                    );
+
+                    selectionContinues = true;
+                    break;
+                }
+
+            case PendingSelectionType.VictoriaProjectionWrenchChooseTargetSupport:
+                {
+                    if (selectedPayloads.Length != 1)
+                        return;
+                    if (!TryGetClientPlayerByIndex(pendingTargetPlayerIndex, out PlayerState targetPlayer))
+                        return;
+
+                    int equipmentIndex = selectedPayloads[0];
+                    if (!pendingSelectionPayloads.Contains(equipmentIndex))
+                        return;
+
+                    if (pendingProjectionWrenchMode == 1)
+                    {
+                        string copiedCardId = targetPlayer.equippedCardIds[equipmentIndex];
+                        if (string.IsNullOrEmpty(copiedCardId))
+                            return;
+                        CardEffectResult copiedUseResult = UseTransientEquipmentCopy(copiedCardId);
+                        if (copiedUseResult == CardEffectResult.Failed)
+                            return;
+                        if (copiedUseResult == CardEffectResult.Pending)
+                        {
+                            selectionContinues = true;
+                            break;
+                        }
+                    }
+                    else if (pendingProjectionWrenchMode == 2)
+                    {
+                        if (!targetPlayer.DiscardEquippedCardByIndex(equipmentIndex, out _))
+                            return;
+                    }
+                    else
+                    {
+                        return;
+                    }
+
+                    selectionResolvedSuccessfully = true;
+                    break;
+                }
         }
 
         if (selectionContinues)
@@ -3417,6 +3723,11 @@ public class PlayerState : NetworkBehaviour
         if (selectionResolvedSuccessfully)
         {
             NotifyPendingPlayResolveIfNeeded();
+        }
+
+        if (selectionResolvedSuccessfully)
+        {
+            CleanupPendingTransientEquipmentCopy();
         }
 
         if (selectionResolvedSuccessfully && followUpPresentationEvent.HasValue && MatchManager.Instance != null)
@@ -3438,6 +3749,7 @@ public class PlayerState : NetworkBehaviour
     public void CancelPendingSelection()
     {
         NotifyPendingPlayResolveIfNeeded();
+        CleanupPendingTransientEquipmentCopy();
         pendingSelectionType = PendingSelectionType.None;
         pendingSelectionPayloads.Clear();
         pendingMinSelectCount = 1;
@@ -3468,6 +3780,8 @@ public class PlayerState : NetworkBehaviour
     private void ResetPendingSelectionContext()
     {
         pendingTargetPlayerIndex = -1;
+        pendingProjectionWrenchMode = 0;
+        pendingTransientEquipmentInstanceId = -1;
         ResetPendingEquipReplacementContext();
     }
 
@@ -3509,6 +3823,9 @@ public enum PendingSelectionType
     VictoriaChooseOnePlayerDiscardSupport, // Victoria: choose one player, then optionally discard one support
     VictoriaChooseZeroOrOneTargetSupportToDiscard, // Victoria: discard up to one target support
     VictoriaTransformOneCenterCardToRandomVictoria, // Victoria: transform one center card into a random Victoria card
+    VictoriaProjectionWrenchChooseMode, // Victoria: choose projection wrench mode
+    VictoriaProjectionWrenchChoosePlayer, // Victoria: choose one player for projection wrench
+    VictoriaProjectionWrenchChooseTargetSupport, // Victoria: choose one support for projection wrench
     ReplaceOneEquippedCard              // Equipment: choose one equipped field card to replace
 }
 

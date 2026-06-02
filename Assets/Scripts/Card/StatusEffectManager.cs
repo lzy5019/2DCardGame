@@ -87,6 +87,8 @@ public class StatusEffectManager : NetworkBehaviour
             return false;
 
         List<StatusRuntimeData> runtimeStates = GetOrCreateRuntimeStates(player);
+        if (TryStackExistingStatus(player, runtimeStates, runtimeData))
+            return true;
         if (TryExtendExistingDurationStatus(player, runtimeStates, runtimeData))
             return true;
 
@@ -133,6 +135,42 @@ public class StatusEffectManager : NetworkBehaviour
     }
 
     [Server]
+    public bool TryConsumeStatusStack(PlayerState player, string statusCardId, int amount = 1)
+    {
+        if (player == null)
+            return false;
+        if (string.IsNullOrEmpty(statusCardId))
+            return false;
+        if (amount <= 0)
+            return false;
+        if (!TryGetRuntimeStates(player, out List<StatusRuntimeData> runtimeStates))
+            return false;
+
+        for (int i = 0; i < runtimeStates.Count; i++)
+        {
+            StatusRuntimeData runtimeData = runtimeStates[i];
+            if (runtimeData == null)
+                continue;
+            if (runtimeData.statusCardId != statusCardId)
+                continue;
+
+            runtimeData.stackCount = Mathf.Max(0, runtimeData.stackCount - amount);
+            if (runtimeData.stackCount <= 0)
+            {
+                RemoveStatusAt(player, runtimeStates, i);
+            }
+            else
+            {
+                SyncRuntimeDataToPlayer(player, i, runtimeData);
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    [Server]
     public int GetStatusCount(PlayerState player, string statusCardId)
     {
         if (player == null)
@@ -150,6 +188,8 @@ public class StatusEffectManager : NetworkBehaviour
             return false;
         if (!HasStatus(player, "81003"))
             return false;
+        if (CardEffectManager.Instance != null)
+            return CardEffectManager.Instance.CountsAsVictoriaSupport(player, cardId);
 
         return IsVictoriaSupportCardId(cardId);
     }
@@ -416,6 +456,33 @@ public class StatusEffectManager : NetworkBehaviour
         return false;
     }
 
+    private bool TryStackExistingStatus(PlayerState player, List<StatusRuntimeData> runtimeStates, StatusRuntimeData incomingRuntimeData)
+    {
+        if (player == null || runtimeStates == null || incomingRuntimeData == null)
+            return false;
+
+        int maxStackCount = GetMaxStackCount(incomingRuntimeData.statusCardId);
+        if (maxStackCount <= 1)
+            return false;
+
+        for (int i = runtimeStates.Count - 1; i >= 0; i--)
+        {
+            StatusRuntimeData existingRuntimeData = runtimeStates[i];
+            if (existingRuntimeData == null)
+                continue;
+            if (existingRuntimeData.statusCardId != incomingRuntimeData.statusCardId)
+                continue;
+
+            existingRuntimeData.stackCount = Mathf.Min(
+                maxStackCount,
+                existingRuntimeData.stackCount + Mathf.Max(1, incomingRuntimeData.stackCount));
+            SyncRuntimeDataToPlayer(player, i, existingRuntimeData);
+            return true;
+        }
+
+        return false;
+    }
+
     private bool TryCreateRuntimeState(string statusCardId, out StatusRuntimeData runtimeData)
     {
         runtimeData = null;
@@ -467,6 +534,14 @@ public class StatusEffectManager : NetworkBehaviour
                     stackCount: 1,
                     remainingTurns: 2,
                     durationTickTiming: StatusDurationTickTiming.OnTurnEnd);
+                return true;
+
+            case "81005":
+                runtimeData = new StatusRuntimeData(
+                    statusCardId,
+                    stackCount: 1,
+                    remainingTurns: -1,
+                    durationTickTiming: StatusDurationTickTiming.None);
                 return true;
 
             default:
@@ -616,6 +691,18 @@ public class StatusEffectManager : NetworkBehaviour
 
             default:
                 return;
+        }
+    }
+
+    private int GetMaxStackCount(string statusCardId)
+    {
+        switch (statusCardId)
+        {
+            case "81005":
+                return 3;
+
+            default:
+                return 1;
         }
     }
 

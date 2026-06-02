@@ -4,6 +4,13 @@ Shader "Unlit/NewUnlitShader"
     {
         [PerRendererData] _MainTex ("Sprite Texture", 2D) = "white" {}
         _Color ("Tint", Color) = (1,1,1,1)
+        [HideInInspector] _StencilComp ("Stencil Comparison", Float) = 8
+        [HideInInspector] _Stencil ("Stencil ID", Float) = 0
+        [HideInInspector] _StencilOp ("Stencil Operation", Float) = 0
+        [HideInInspector] _StencilWriteMask ("Stencil Write Mask", Float) = 255
+        [HideInInspector] _StencilReadMask ("Stencil Read Mask", Float) = 255
+        [HideInInspector] _ColorMask ("Color Mask", Float) = 15
+        [HideInInspector] _UseUIAlphaClip ("Use Alpha Clip", Float) = 0
         _OutlineColor ("Outline Color", Color) = (0.25, 1.0, 0.85, 1.0)
         _OutlineSize ("Outline Size", Range(0, 8)) = 1.5
         _FrameSoftness ("Frame Softness", Range(0.1, 4)) = 1.0
@@ -32,24 +39,39 @@ Shader "Unlit/NewUnlitShader"
             "CanUseSpriteAtlas"="True"
         }
 
+        Stencil
+        {
+            Ref [_Stencil]
+            Comp [_StencilComp]
+            Pass [_StencilOp]
+            ReadMask [_StencilReadMask]
+            WriteMask [_StencilWriteMask]
+        }
+
         Cull Off
         Lighting Off
         ZWrite Off
+        ZTest [unity_GUIZTestMode]
         Blend One OneMinusSrcAlpha
+        ColorMask [_ColorMask]
 
         Pass
         {
             CGPROGRAM
             #pragma vertex vert
             #pragma fragment frag
+            #pragma multi_compile_local _ UNITY_UI_CLIP_RECT
+            #pragma multi_compile_local _ UNITY_UI_ALPHACLIP
 
             #include "UnityCG.cginc"
+            #include "UnityUI.cginc"
 
             struct appdata
             {
                 float4 vertex : POSITION;
                 float2 uv : TEXCOORD0;
                 float4 color : COLOR;
+                UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
             struct v2f
@@ -57,11 +79,14 @@ Shader "Unlit/NewUnlitShader"
                 float4 vertex : SV_POSITION;
                 float2 uv : TEXCOORD0;
                 fixed4 color : COLOR;
+                float4 worldPosition : TEXCOORD1;
+                UNITY_VERTEX_OUTPUT_STEREO
             };
 
             sampler2D _MainTex;
             float4 _MainTex_ST;
             float4 _MainTex_TexelSize;
+            float4 _ClipRect;
             fixed4 _Color;
             fixed4 _OutlineColor;
             float _OutlineSize;
@@ -82,9 +107,12 @@ Shader "Unlit/NewUnlitShader"
             v2f vert(appdata v)
             {
                 v2f o;
+                UNITY_SETUP_INSTANCE_ID(v);
+                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
                 o.vertex = UnityObjectToClipPos(v.vertex);
                 o.uv = TRANSFORM_TEX(v.uv, _MainTex);
                 o.color = v.color * _Color;
+                o.worldPosition = v.vertex;
                 return o;
             }
 
@@ -156,7 +184,18 @@ Shader "Unlit/NewUnlitShader"
                 sourceModeCol.a *= maskedAlpha;
                 sourceModeCol.rgb *= sourceModeCol.a;
 
-                return lerp(result, sourceModeCol, saturate(_UseSourceAlphaMask));
+                fixed4 finalColor = lerp(result, sourceModeCol, saturate(_UseSourceAlphaMask));
+
+                #ifdef UNITY_UI_CLIP_RECT
+                finalColor.a *= UnityGet2DClipping(i.worldPosition.xy, _ClipRect);
+                finalColor.rgb *= finalColor.a;
+                #endif
+
+                #ifdef UNITY_UI_ALPHACLIP
+                clip(finalColor.a - 0.001);
+                #endif
+
+                return finalColor;
             }
             ENDCG
         }

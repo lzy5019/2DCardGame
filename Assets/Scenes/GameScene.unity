@@ -158,8 +158,8 @@ MonoBehaviour:
   syncMode: 0
   syncInterval: 0
   startCards:
-  - 00001
-  - 00001
+  - 48002
+  - 40015
   - 00001
   - 00001
   - 40005
@@ -167,7 +167,10 @@ MonoBehaviour:
   - 48001
   - 48001
   - 40013
-  - 40013
+  - 40014
+  - 40016
+  - 40017
+  - 21001
   gameStarted: 0
   gameEnded: 0
   currentTurnPlayerIndex: -1

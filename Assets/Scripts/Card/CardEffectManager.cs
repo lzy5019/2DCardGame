@@ -828,6 +828,15 @@ public class CardEffectManager : NetworkBehaviour
                 return CardEffectResult.Applied;
             }
 
+            case "40016":   // 推进之王
+                AddManaWithArmedThresholds(player, 1, 1, 6);
+                return CardEffectResult.Applied;
+
+            case "40015":   // 凯瑟琳
+                if (!TryAddDerivedCardsToPlayerDeck(player, cardId, 1, true, true))
+                    return CardEffectResult.Failed;
+                return CardEffectResult.Applied;
+
             #endregion
 
             #region ----敌人----
@@ -911,6 +920,33 @@ public class CardEffectManager : NetworkBehaviour
                 return CardEffectResult.Applied;
             }
 
+            case "48002":   // 投影扳手
+                {
+                CardEffectResult banishResult = player.BanishPlayedCardById(cardId);
+                if (banishResult == CardEffectResult.Failed)
+                    return CardEffectResult.Failed;
+
+                List<string> optionCardIds = new List<string>();
+                List<int> optionPayloads = new List<int>();
+
+                if (TryAddSelectionOptionCard("480021", 1, optionCardIds, optionPayloads) &&
+                    TryAddSelectionOptionCard("480022", 2, optionCardIds, optionPayloads))
+                {
+                    player.BeginSelection(
+                        PendingSelectionType.VictoriaProjectionWrenchChooseMode,
+                        "选择1个效果",
+                        1,
+                        1,
+                        optionCardIds,
+                        optionPayloads
+                    );
+
+                    return CardEffectResult.Pending;
+                }
+
+                return CardEffectResult.Failed;
+            }
+
             case "92001":   // 皇帝的利刃
                 {
                 player.AddScore(5);
@@ -967,8 +1003,15 @@ public class CardEffectManager : NetworkBehaviour
     [Server]    // 装备场地
     public CardEffectResult ResolveEquipEnterEffect(int playerIndex, string cardId)
     {
-        if (!TryGetPlayer(playerIndex, out _))
+        if (!TryGetPlayer(playerIndex, out PlayerState player))
             return CardEffectResult.Failed;
+
+        if (StatusEffectManager.Instance != null &&
+            CountsAsVictoriaSupport(player, cardId) &&
+            StatusEffectManager.Instance.TryConsumeStatusStack(player, "81005"))
+        {
+            player.DrawCards(1);
+        }
 
         switch (cardId)
         {
@@ -1068,6 +1111,12 @@ public class CardEffectManager : NetworkBehaviour
     [Server]    // 使用支援牌
     public CardEffectResult ResolveEquipUseEffect(int playerIndex, string cardId, int equipmentIndex)
     {
+        return ResolveEquipUseEffect(playerIndex, cardId, equipmentIndex, true);
+    }
+
+    [Server]
+    public CardEffectResult ResolveEquipUseEffect(int playerIndex, string cardId, int equipmentIndex, bool consumeUsage)
+    {
         if (!TryGetPlayer(playerIndex, out PlayerState player))
             return CardEffectResult.Failed;
 
@@ -1075,14 +1124,14 @@ public class CardEffectManager : NetworkBehaviour
         {
             case "21001":   // 阿戈尔示波器
                 {
-                if (equipmentIndex < 0)
+                if (!player.IsValidEquipmentHandle(equipmentIndex))
                     return CardEffectResult.Failed;
                 if (!player.SpendMana(2))
                 {
                     player.ShowHintToOwner("费用不足");
                     return CardEffectResult.Failed;
                 }
-                if (!player.SetEquipmentUsed(equipmentIndex, true))
+                if (!TryConsumeEquipmentUsage(player, equipmentIndex, consumeUsage))
                     return CardEffectResult.Failed;
 
                 return BeginDiscardPileBanishSelection(
@@ -1095,9 +1144,9 @@ public class CardEffectManager : NetworkBehaviour
 
             case "21002":   // 小帮手
                 {
-                if (equipmentIndex < 0)
+                if (!player.IsValidEquipmentHandle(equipmentIndex))
                     return CardEffectResult.Failed;
-                if (!player.SetEquipmentUsed(equipmentIndex, true))
+                if (!TryConsumeEquipmentUsage(player, equipmentIndex, consumeUsage))
                     return CardEffectResult.Failed;
 
                 return BeginRandomDiscardPileBanishSelection(
@@ -1110,9 +1159,9 @@ public class CardEffectManager : NetworkBehaviour
 
             case "21003":   // 阿戈尔重刃
                 {
-                if (equipmentIndex < 0)
+                if (!player.IsValidEquipmentHandle(equipmentIndex))
                     return CardEffectResult.Failed;
-                if (!player.SetEquipmentUsed(equipmentIndex, true))
+                if (!TryConsumeEquipmentUsage(player, equipmentIndex, consumeUsage))
                     return CardEffectResult.Failed;
 
                 player.AddAttack(3);
@@ -1121,9 +1170,9 @@ public class CardEffectManager : NetworkBehaviour
 
             case "40008":   // 维式重锤
                 {
-                if (equipmentIndex < 0)
+                if (!player.IsValidEquipmentHandle(equipmentIndex))
                     return CardEffectResult.Failed;
-                if (!player.SetEquipmentUsed(equipmentIndex, true))
+                if (!TryConsumeEquipmentUsage(player, equipmentIndex, consumeUsage))
                     return CardEffectResult.Failed;
 
                 return BeginCenterCardSelection(
@@ -1137,9 +1186,9 @@ public class CardEffectManager : NetworkBehaviour
 
             case "40009":   // 伦蒂尼姆
                 {
-                if (equipmentIndex < 0)
+                if (!player.IsValidEquipmentHandle(equipmentIndex))
                     return CardEffectResult.Failed;
-                if (!player.SetEquipmentUsed(equipmentIndex, true))
+                if (!TryConsumeEquipmentUsage(player, equipmentIndex, consumeUsage))
                     return CardEffectResult.Failed;
 
                 int supportCount = Mathf.Min(12, CountEquippedSupportCards(player));
@@ -1149,11 +1198,11 @@ public class CardEffectManager : NetworkBehaviour
 
             case "40010":   // 维多利亚军粮
                 {
-                if (equipmentIndex < 0)
+                if (!player.IsValidEquipmentHandle(equipmentIndex))
                     return CardEffectResult.Failed;
                 if (StatusEffectManager.Instance == null)
                     return CardEffectResult.Failed;
-                if (!player.SetEquipmentUsed(equipmentIndex, true))
+                if (!TryConsumeEquipmentUsage(player, equipmentIndex, consumeUsage))
                     return CardEffectResult.Failed;
                 if (!StatusEffectManager.Instance.ApplyStatus(player, "81003"))
                     return CardEffectResult.Failed;
@@ -1161,9 +1210,23 @@ public class CardEffectManager : NetworkBehaviour
                 return CardEffectResult.Applied;
             }
 
+            case "40014":   // 加速维式重锤
+                {
+                if (!player.IsValidEquipmentHandle(equipmentIndex))
+                    return CardEffectResult.Failed;
+                if (StatusEffectManager.Instance == null)
+                    return CardEffectResult.Failed;
+                if (!TryConsumeEquipmentUsage(player, equipmentIndex, consumeUsage))
+                    return CardEffectResult.Failed;
+                if (!StatusEffectManager.Instance.ApplyStatus(player, "81005"))
+                    return CardEffectResult.Failed;
+
+                return CardEffectResult.Applied;
+            }
+
             case "400061":  // 极致火力
                 {
-                if (equipmentIndex < 0)
+                if (!player.IsValidEquipmentHandle(equipmentIndex))
                     return CardEffectResult.Failed;
 
                 player.AddAttack(2);
@@ -1173,7 +1236,7 @@ public class CardEffectManager : NetworkBehaviour
 
             case "400062":  // 高效补给
                 {
-                if (equipmentIndex < 0)
+                if (!player.IsValidEquipmentHandle(equipmentIndex))
                     return CardEffectResult.Failed;
 
                 player.AddMana(2);
@@ -1183,7 +1246,7 @@ public class CardEffectManager : NetworkBehaviour
 
             case "400063":  // 铁钳号
                 {
-                if (equipmentIndex < 0)
+                if (!player.IsValidEquipmentHandle(equipmentIndex))
                     return CardEffectResult.Failed;
                 if (player.attack < 5)
                 {
@@ -1227,7 +1290,7 @@ public class CardEffectManager : NetworkBehaviour
 
             case "400121":  // 悲叹的仆役
                 {
-                if (equipmentIndex < 0)
+                if (!player.IsValidEquipmentHandle(equipmentIndex))
                     return CardEffectResult.Failed;
 
                 if (CountEquippedSupportCards(player) >= 2)
@@ -1632,6 +1695,97 @@ public class CardEffectManager : NetworkBehaviour
         }
 
         return count;
+    }
+
+    private bool TryConsumeEquipmentUsage(PlayerState player, int equipmentIndex, bool consumeUsage)
+    {
+        if (!consumeUsage)
+            return true;
+        if (player == null)
+            return false;
+
+        return player.SetEquipmentUsed(equipmentIndex, true);
+    }
+
+    [Server]
+    public bool CountsAsVictoriaSupport(PlayerState player, string cardId)
+    {
+        if (!IsSupportCard(cardId))
+            return false;
+        if (IsBaseVictoriaSupportCard(cardId))
+            return true;
+        if (player == null)
+            return false;
+
+        return player.equippedCardIds.Contains("40017");
+    }
+
+    private bool IsBaseVictoriaSupportCard(string cardId)
+    {
+        if (string.IsNullOrEmpty(cardId))
+            return false;
+        if (CardDatabase.Instance == null)
+            return false;
+
+        CardData cardData = CardDatabase.Instance.GetCardById(cardId);
+        if (cardData == null)
+            return false;
+
+        return cardData.cardCategory == CardCategory.Victoria &&
+               cardData.cardType == CardType.Support;
+    }
+
+    private bool IsSupportCard(string cardId)
+    {
+        if (string.IsNullOrEmpty(cardId))
+            return false;
+        if (CardDatabase.Instance == null)
+            return false;
+
+        CardData cardData = CardDatabase.Instance.GetCardById(cardId);
+        if (cardData == null)
+            return false;
+
+        return cardData.cardType == CardType.Support;
+    }
+
+    private void AddManaWithArmedThresholds(PlayerState player, int baseAmount, params int[] thresholds)
+    {
+        if (player == null)
+            return;
+
+        int totalAmount = Mathf.Max(0, baseAmount);
+        int supportCount = CountEquippedSupportCards(player);
+        for (int i = 0; i < thresholds.Length; i++)
+        {
+            if (supportCount >= thresholds[i])
+            {
+                totalAmount++;
+            }
+        }
+
+        if (totalAmount > 0)
+        {
+            player.AddMana(totalAmount);
+        }
+    }
+
+    private bool TryAddSelectionOptionCard(string cardId, int payload, List<string> optionCardIds, List<int> optionPayloads)
+    {
+        if (string.IsNullOrEmpty(cardId))
+            return false;
+        if (optionCardIds == null || optionPayloads == null)
+            return false;
+        if (CardDatabase.Instance == null)
+            return false;
+
+        CardData cardData = CardDatabase.Instance.GetCardById(cardId);
+        if (cardData == null || cardData.cardSprite == null)
+            return false;
+
+        optionCardIds.Add(cardId);
+        optionPayloads.Add(payload);
+        return true;
     }
 
     private bool IsSellableVictoriaCard(CardData candidate)

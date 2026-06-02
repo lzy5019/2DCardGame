@@ -18,7 +18,7 @@ MonoBehaviour:
   cardType: 5
   cardCategory: 8
   cardNum: 3
-  cardSprite: {fileID: 21300000, guid: 29da68c3804ccbf4281996fb39e1738d, type: 3}
+  cardSprite: {fileID: 21300000, guid: 2ebb99ca80d87904fab14c3284d18ca4, type: 3}
   playWav: {fileID: 0}
   buyWav: {fileID: 0}
   description: "\u83B7\u5F97\u4E00\u5C42\u795D\u798F\u3010\u8C03\u5EA6\u3011"
